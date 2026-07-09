@@ -1,0 +1,44 @@
+[project]
+name = "streamcatcher"
+version = "0.0.1"
+description = "A cross-platform CLI to view RTMP/RTSP streams (audio + video) in a small window."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Thugipan Sivanesan", email = "thugipan@gmail.com" }]
+keywords = ["rtsp", "rtmp", "stream", "cli", "vlc"]
+dependencies = [
+    "python-vlc>=3.0.21203",
+    "typer>=0.26.8",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.20",
+    "pre-commit>=4.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/streamcatcher"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+
+[tool.pytest.ini_options]
+addopts = "-q --cov=streamcatcher --cov-report=term-missing"
+testpaths = ["tests"]
+pythonpath = ["src"]

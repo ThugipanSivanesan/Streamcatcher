@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamcatcher — Build Plan</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.82em' x='.08em' font-size='86'%3E%F0%9F%8E%A5%3C/text%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: #142033;
+      --muted: #637083;
+      --paper: #f4f7fb;
+      --card: #ffffff;
+      --line: #dce3ec;
+      --navy: #00294d;
+      --navy-2: #004a80;
+      --blue: #007cc3;
+      --blue-mark: #4fa3d9;
+      --blue-soft: #e6f2fb;
+      --green: #0e8a6b;
+      --green-soft: #e6f6f0;
+      --amber: #b26a00;
+      --amber-soft: #fff3dd;
+      --red: #c0392b;
+      --red-soft: #fdecea;
+      --shadow: 0 14px 36px rgba(0, 41, 77, .08);
+      --radius: 20px;
+      --wrap: 1180px;
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #edf6ff;
+        --muted: #a8b6c9;
+        --paper: #071827;
+        --card: #0d2235;
+        --line: #213a52;
+        --navy: #001c36;
+        --navy-2: #00395f;
+        --blue: #4fa3d9;
+        --blue-mark: #78c5f0;
+        --blue-soft: #12324c;
+        --green: #5ad1a0;
+        --green-soft: #10362c;
+        --amber: #e3a948;
+        --amber-soft: #3a2b12;
+        --red: #ef8d83;
+        --red-soft: #3a1d20;
+        --shadow: 0 18px 44px rgba(0, 0, 0, .35);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .wrap {
+      width: min(var(--wrap), calc(100% - 40px));
+      margin: auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(255, 255, 255, .12);
+      background: rgba(0, 41, 77, .96);
+      color: #ffffff;
+      backdrop-filter: blur(12px);
+    }
+
+    .nav {
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .brand {
+      margin-right: auto;
+      font: 700 15px/1 var(--serif);
+      white-space: nowrap;
+    }
+
+    .nav a {
+      color: #cfe3f5;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-decoration: none;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .nav a:hover {
+      color: #ffffff;
+    }
+
+    .page {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    .report-header {
+      margin: 0;
+      overflow: hidden;
+      background: linear-gradient(135deg, #00294d 0%, #004a80 60%, #007cc3 100%);
+      color: #ffffff;
+      padding: 72px 0 0;
+    }
+
+    .hero-inner {
+      width: min(var(--wrap), calc(100% - 40px));
+      margin: auto;
+      padding-bottom: 58px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      color: #cfe3f5;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 2px;
+      flex: 0 0 auto;
+      background: var(--blue-mark);
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.18;
+      overflow-wrap: break-word;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin: 18px 0 25px;
+      font: 500 clamp(52px, 7vw, 88px)/.94 var(--serif);
+      letter-spacing: -.045em;
+    }
+
+    h2 {
+      margin: 0 0 20px;
+      font: 500 clamp(30px, 4vw, 42px)/1.08 var(--serif);
+      letter-spacing: -.025em;
+    }
+
+    h3 {
+      margin: 30px 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    p {
+      margin: 0 0 16px;
+    }
+
+    .goal {
+      max-width: 840px;
+      margin: 0;
+      color: #ffffff;
+      font-size: clamp(18px, 2vw, 23px);
+      line-height: 1.45;
+    }
+
+    .goal strong,
+    .report-header strong {
+      color: #ffffff;
+    }
+
+    .chips {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      width: 100%;
+      margin: 0;
+      padding: 0 calc((100% - min(var(--wrap), calc(100% - 40px))) / 2);
+      border-top: 1px solid rgba(255, 255, 255, .18);
+      background: rgba(0, 41, 77, .35);
+      list-style: none;
+    }
+
+    .chip {
+      margin: 0;
+      padding: 18px 20px;
+      border-left: 1px solid rgba(255, 255, 255, .14);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .chip:first-child {
+      border-left: 0;
+      padding-left: 0;
+    }
+
+    main {
+      width: min(var(--wrap), calc(100% - 40px));
+      margin: auto;
+      padding: 48px 0 70px;
+    }
+
+    .section {
+      scroll-margin-top: 74px;
+      margin-bottom: 48px;
+      padding: 0;
+    }
+
+    .section > h2 {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .section > h2::before {
+      display: block;
+      width: 28px;
+      height: 2px;
+      margin-bottom: 5px;
+      background: var(--blue);
+      content: "";
+    }
+
+    .section > p,
+    .section > ul,
+    .section > ol:not(.slices),
+    .section > h3,
+    .section > .table-wrap,
+    .section > pre {
+      max-width: 100%;
+    }
+
+    .section > p,
+    .section > ul,
+    .section > ol:not(.slices),
+    .section > pre,
+    .section > .table-wrap,
+    .section > h3 {
+      border-radius: var(--radius);
+    }
+
+    .section > p,
+    .section > ul,
+    .section > ol:not(.slices) {
+      color: var(--muted);
+    }
+
+    .section > ul,
+    .section > ol:not(.slices) {
+      margin: 0 0 18px;
+      padding: 24px 28px 24px 48px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+
+    li {
+      margin: 8px 0;
+    }
+
+    strong {
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    code {
+      border-radius: 5px;
+      background: var(--blue-soft);
+      color: var(--navy);
+      font-family: var(--mono);
+      font-size: .91em;
+      padding: 2px 5px;
+    }
+
+    pre {
+      margin: 18px 0 24px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      color: var(--muted);
+      padding: 22px 24px;
+      line-height: 1.5;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    pre code {
+      display: block;
+      min-width: max-content;
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 12px;
+    }
+
+    .table-wrap {
+      width: 100%;
+      margin: 22px 0 28px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      min-width: 700px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      padding: 13px 18px;
+      background: var(--blue-soft);
+      color: var(--navy-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 17px 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    td:first-child {
+      width: 24%;
+      color: var(--ink);
+      font-weight: 750;
+    }
+
+    tr:first-child td {
+      border-top: 0;
+    }
+
+    .slices {
+      display: grid;
+      gap: 0;
+      margin: 26px 0 22px;
+      padding: 10px 28px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      list-style: none;
+      counter-reset: slice;
+    }
+
+    .slices li {
+      position: relative;
+      margin: 0;
+      padding: 22px 0 22px 66px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .slices li:last-child {
+      border-bottom: 0;
+    }
+
+    .slices li:not(:last-child)::after {
+      position: absolute;
+      left: 20px;
+      top: 61px;
+      bottom: -18px;
+      width: 2px;
+      background: var(--line);
+      content: "";
+    }
+
+    .slices li::before {
+      position: absolute;
+      top: 22px;
+      left: 0;
+      z-index: 1;
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--blue);
+      color: #ffffff;
+      content: counter(slice);
+      counter-increment: slice;
+      font: 700 17px/1 var(--serif);
+      box-shadow: 0 0 0 5px var(--blue-soft);
+    }
+
+    .slice-title {
+      display: block;
+      margin: 1px 0 5px;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    footer {
+      padding: 26px 0 38px;
+      border-top: 1px solid var(--line);
+      color: #758195;
+      font-size: 11px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      code {
+        color: #d7eeff;
+      }
+
+      th {
+        color: #d7eeff;
+      }
+    }
+
+    @media (max-width: 850px) {
+      .nav {
+        gap: 18px;
+      }
+
+      .nav .brand {
+        display: none;
+      }
+
+      .chips {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .chip:nth-child(odd) {
+        border-left: 0;
+        padding-left: 0;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .wrap,
+      .hero-inner,
+      main {
+        width: min(100% - 24px, var(--wrap));
+      }
+
+      .report-header {
+        padding-top: 48px;
+      }
+
+      h1 {
+        font-size: 46px;
+      }
+
+      .chips {
+        grid-template-columns: 1fr;
+        padding: 0 12px;
+      }
+
+      .chip {
+        border-left: 0;
+        padding-left: 0;
+      }
+
+      .section > ul,
+      .section > ol:not(.slices),
+      pre {
+        padding: 21px;
+      }
+
+      .section > ul,
+      .section > ol:not(.slices) {
+        padding-left: 39px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .slices {
+        padding: 6px 18px;
+      }
+
+      .slices li {
+        padding-left: 58px;
+      }
+    }
+
+    @media print {
+      .topbar {
+        display: none;
+      }
+
+      body {
+        background: #ffffff;
+      }
+
+      .section,
+      .slices,
+      .table-wrap,
+      pre {
+        break-inside: avoid;
+        box-shadow: none;
+      }
+
+      .report-header {
+        padding-top: 45px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Report sections">
+    <div class="wrap nav">
+      <span class="brand">Streamcatcher / Build Plan</span>
+      <a href="#what-we-are-building">What we're building</a>
+      <a href="#why-libvlc">Why libVLC</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#security">Security posture</a>
+      <a href="#tooling">Tooling &amp; stack</a>
+      <a href="#delivery">Delivery</a>
+      <a href="#verification">How we verify</a>
+      <a href="#ways-of-working">Ways of working</a>
+    </div>
+  </nav>
+  <div class="page">
+    <header class="report-header">
+      <div class="hero-inner">
+        <p class="eyebrow">Build Plan</p>
+        <h1>Streamcatcher</h1>
+        <p class="goal"><strong>One-line goal:</strong> A cross-platform Python CLI that connects to an RTMP or RTSP stream and plays it (audio + video) in a small, positionable window — with snapshot capture and resilient reconnection — built securely from commit #1.</p>
+      </div>
+      <ul class="chips" aria-label="Project metadata">
+        <li class="chip">Backend: libVLC</li>
+        <li class="chip">Audio + video</li>
+        <li class="chip">Cross-platform</li>
+        <li class="chip">CLI: Typer</li>
+      </ul>
+    </header>
+
+    <main>
+      <section class="section" id="what-we-are-building">
+        <h2>1. What we're building</h2>
+        <p><code>streamcatcher</code> is a command-line tool. You give it a stream URL; it opens a small native window and plays the live stream. It can grab still frames, resize/reposition its window, and it keeps trying to reconnect when a flaky stream drops.</p>
+
+        <p>Example usage:</p>
+        <pre><code>streamcatcher play rtsp://camera.local:554/stream1
+streamcatcher play rtmp://live.example/app/key --width 640 --height 360 --x 40 --y 40
+streamcatcher play rtsp://cam/stream --snapshot shot.png      # grab one frame, exit
+# while a window is open: press 's' to save a snapshot, 'q' to quit</code></pre>
+
+        <h3>Confirmed requirements</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Decision</th>
+                <th>Choice</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Playback backend</td>
+                <td><strong>python-vlc (libVLC)</strong> — robust RTMP+RTSP, handles audio, manages its own window, reconnects well</td>
+              </tr>
+              <tr>
+                <td>Audio</td>
+                <td><strong>Audio + video</strong></td>
+              </tr>
+              <tr>
+                <td>Platforms</td>
+                <td><strong>Cross-platform</strong> (macOS / Linux / Windows)</td>
+              </tr>
+              <tr>
+                <td>Features</td>
+                <td><strong>View</strong>, <strong>Snapshot</strong> (both a live hotkey and a one-shot <code>--snapshot</code> flag), <strong>Window size + position flags</strong></td>
+              </tr>
+              <tr>
+                <td>Recording</td>
+                <td>Out of scope for now</td>
+              </tr>
+              <tr>
+                <td>Reconnect</td>
+                <td><strong>Auto-retry with exponential backoff</strong></td>
+              </tr>
+              <tr>
+                <td>CLI framework</td>
+                <td><strong>Typer</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="why-libvlc">
+        <h2>2. Why libVLC</h2>
+        <ul>
+          <li>Handles both RTMP and RTSP, plus their audio tracks, with no extra plumbing — the FFmpeg-based alternatives are video-only or need a separate audio path.</li>
+          <li>Manages its own decode + render + window, and tolerates real-world stream hiccups far better than <code>cv2.imshow</code>.</li>
+          <li>Cross-platform via a single, well-maintained binding (<code>python-vlc</code>).</li>
+          <li><strong>Trade-off we accept:</strong> libVLC (the VLC runtime) must be present on the machine. We document install per-OS and detect+explain clearly if it's missing. Snapshots use libVLC's native <code>video_take_snapshot</code>, so they work even though we never touch raw frames ourselves.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="architecture">
+        <h2>3. Architecture (offline-first, pluggable)</h2>
+        <p>Follows the workflow's provider pattern so the app and the <strong>entire test suite run with no network, no credentials, no live stream</strong>.</p>
+
+        <pre><code>src/streamcatcher/
+  __init__.py
+  cli.py            # Typer app: `play` command, flag parsing, wires everything
+  config.py         # pydantic-settings Settings; StreamUrl as SecretStr; log redaction seed
+  logging_setup.py  # root logger + secret-redacting filter (from the workflow)
+  player/
+    base.py         # Player Protocol: play(), stop(), snapshot(path), is_playing()
+    factory.py      # get_player(settings) keyed on a backend enum; default = offline stub
+    vlc_player.py   # LIVE provider — lazy-imports `vlc` INSIDE the call path
+    stub_player.py  # OFFLINE default — no window, deterministic, used by tests
+  reconnect.py      # backoff policy (attempts, base delay, cap, jitter) — pure &amp; unit-tested
+  snapshot.py       # filename/timestamp helpers; one-shot vs hotkey orchestration
+  errors.py         # typed exceptions (LibVlcNotFound, StreamUnavailable, ...)</code></pre>
+
+        <h3>Key design points</h3>
+        <ul>
+          <li><strong>Player is a <code>Protocol</code>.</strong> <code>factory.get_player()</code> returns the <strong>offline stub by default</strong>; the live libVLC player is only selected when actually playing a real stream, and it <strong>lazy-imports <code>vlc</code> inside the method</strong> so importing the package never requires VLC to be installed.</li>
+          <li><strong>The stream URL is a secret.</strong> RTSP/RTMP URLs routinely embed <code>user:pass@host</code>. The URL is stored as a <code>SecretStr</code>, never printed in full, and its value seeds the log-redaction filter — so credentials can't leak into logs or tracebacks.</li>
+          <li><strong>Reconnect logic is pure and deterministic</strong> (compute the next delay from attempt count), so it's fully unit-testable without sleeping or connecting. The live player calls into it; safety default = give up cleanly after the cap rather than spin forever.</li>
+          <li><strong><code>--snapshot</code> one-shot path</strong> doesn't open the interactive window: it connects, waits for first frame, writes the file, exits — good for scripts/cron.</li>
+          <li><strong>Hotkeys</strong> (<code>s</code> = snapshot, <code>q</code> = quit) are read on the window/console; the stub reports supported keys so tests can assert wiring without a GUI.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="security">
+        <h2>4. Security posture (from commit #1)</h2>
+        <ul>
+          <li>Stream URL + any credentials handled as <code>SecretStr</code>; <code>secret_values()</code> seeds a <strong>redacting log filter</strong> (also matches <code>Bearer …</code>, <code>sk-…</code>, long hex/base58 shapes).</li>
+          <li><code>.gitignore</code> excludes <code>.env</code>, <code>*.key</code>, <code>*.pem</code>, <code>secrets/</code>; <code>.env.example</code> holds placeholders only.</li>
+          <li><strong>Pre-commit:</strong> gitleaks, ruff (+fix), ruff-format, detect-private-key, large-file / EOF / whitespace / yaml / toml checks.</li>
+          <li><strong>CI (GitHub Actions), PR-gated + weekly cron, least-privilege, all actions SHA-pinned:</strong></li>
+        </ul>
+        <ol>
+          <li>lint &amp; test — <code>ruff check</code> + <code>ruff format --check</code> + <code>pytest</code></li>
+          <li>gitleaks (pinned CLI binary)</li>
+          <li>osv-scanner (pinned CLI binary) against <code>uv.lock</code></li>
+        </ol>
+        <ul>
+          <li><strong>Dependabot</strong> monthly, grouped, for <code>uv</code> + <code>github-actions</code>.</li>
+          <li>No <code>eval</code>/<code>exec</code>/<code>pickle</code>/<code>shell=True</code>; the only subprocess-ish surface is libVLC via its Python binding. HTTP/stream operations get timeouts and fail closed.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="tooling">
+        <h2>5. Tooling &amp; stack</h2>
+        <ul>
+          <li><strong>Python 3.12+</strong>, packaged with <strong>uv</strong> + <strong>hatchling</strong>, <code>src/</code> layout.</li>
+          <li><strong>Runtime deps:</strong> <code>python-vlc</code>, <code>typer</code>, <code>pydantic</code>, <code>pydantic-settings</code>.</li>
+          <li><strong>System dep:</strong> VLC / libVLC (documented per-OS; detected at runtime).</li>
+          <li><strong>Dev:</strong> <code>pytest</code> + <code>pytest-cov</code>, <code>ruff</code>, <code>pre-commit</code>.</li>
+          <li><strong>Lint:</strong> ruff line-length 100, <code>select = E,F,I,B,UP,W</code>, <code>target-version = py312</code>.</li>
+          <li><strong>Entry point:</strong> <code>streamcatcher = "streamcatcher.cli:app"</code>.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="delivery">
+        <h2>6. Delivery — small vertical slices (TDD, branch-per-feature, merge on green)</h2>
+        <p>Each slice is one branch, tests first, merged only when all CI checks are green.</p>
+
+        <ol class="slices">
+          <li><span class="slice-title">Slice 0 — Secure bootstrap (to <code>main</code>).</span> Repo skeleton, pyproject, ruff/pytest config, typed+redacted config, <code>.gitignore</code>/<code>.env.example</code>, pre-commit, CI (3 jobs), dependabot, README. Verified by <code>pre-commit run --all-files</code> clean; CI first gates on Slice 1's PR.</li>
+          <li><span class="slice-title">Slice 1 — CLI skeleton + config.</span> <code>streamcatcher play &lt;url&gt;</code> parses flags, builds <code>Settings</code>, selects the <strong>offline stub player</strong>, logs a redacted URL. Full test coverage, no network.</li>
+          <li><span class="slice-title">Slice 2 — libVLC live player.</span> <code>vlc_player.py</code> behind the factory, lazy-imported; opens the window, plays audio+video, honors <code>--width/--height/--x/--y</code>. Clear error if libVLC absent. Manual smoke script (not collected by pytest) against a public RTSP/RTMP test stream.</li>
+          <li><span class="slice-title">Slice 3 — Reconnect with backoff.</span> Pure backoff policy + wiring into the live player; unit tests cover the delay schedule and give-up behavior.</li>
+          <li><span class="slice-title">Slice 4 — Snapshots.</span> One-shot <code>--snapshot PATH</code> and the live <code>s</code> hotkey, via libVLC <code>video_take_snapshot</code>; timestamped default filenames. Tested against the stub.</li>
+          <li><span class="slice-title">Slice 5 — Docs &amp; polish.</span> README quickstart, per-OS libVLC install notes, troubleshooting, <code>--help</code> examples.</li>
+        </ol>
+      </section>
+
+      <section class="section" id="verification">
+        <h2>7. How we verify</h2>
+        <ul>
+          <li><code>pytest</code> green offline on every slice; a grep of the test run confirms <strong>zero real network/credential use</strong>.</li>
+          <li>Live paths validated by hand via an <strong>opt-in smoke script</strong> against free public RTSP/RTMP test streams — never in CI.</li>
+          <li><code>ruff check</code> + <code>ruff format --check</code> clean; <code>pre-commit run --all-files</code> clean.</li>
+          <li>Manual end-to-end: open a real stream, confirm audio+video in the small window, take a snapshot, kill the source and watch it retry.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="ways-of-working">
+        <h2>8. Ways of working</h2>
+        <ul>
+          <li><strong>Agentic delegation</strong> throughout: repo search &amp; scoped read-only bash → thin-sonnet; UI/design &amp; git workflows → Codex; architecture, review, and anything irreversible (push/merge/delete) stays with the main agent.</li>
+          <li><strong>Context discipline:</strong> one slice per session, compact/clear at merge boundaries.</li>
+          <li>This HTML report itself was authored by <strong>Codex</strong> per the delegation rules.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
