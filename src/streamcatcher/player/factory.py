@@ -22,7 +22,7 @@ def get_player(settings: Settings) -> Player:
     if settings.backend is Backend.STUB:
         return StubPlayer(url)
     if settings.backend is Backend.OPENCV:
-        return OpenCvPlayer(url)
+        return OpenCvPlayer(url, projection=settings.projection)
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive
         f"Backend {settings.backend.value!r} is not supported."

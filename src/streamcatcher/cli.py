@@ -6,7 +6,7 @@ import logging
 
 import typer
 
-from streamcatcher.config import Backend, Settings
+from streamcatcher.config import Backend, Projection, Settings
 from streamcatcher.logging_setup import install_secret_redaction
 from streamcatcher.player.factory import get_player
 
@@ -36,13 +36,23 @@ def play(
         help="Playback backend: 'opencv' (live OpenCV window, video only) or "
         "'stub' (offline). Defaults to STREAMCATCHER_BACKEND, or the offline stub.",
     ),
+    projection: Projection | None = typer.Option(
+        None,
+        "--projection",
+        "-p",
+        help="Frame geometry: 'equirect' reprojects a 360 equirectangular stream "
+        "to a look-around viewport (W/A/S/D to aim, +/- to zoom); 'flat' shows "
+        "frames as-is. Defaults to STREAMCATCHER_PROJECTION, or flat.",
+    ),
 ) -> None:
     """Connect to URL and play the stream."""
-    # Pass ``backend`` only when given so the STREAMCATCHER_BACKEND env var still
-    # applies as the default; an explicit flag overrides it.
+    # Pass ``backend``/``projection`` only when given so the STREAMCATCHER_* env
+    # vars still apply as defaults; an explicit flag overrides them.
     overrides: dict[str, object] = {"stream_url": url}
     if backend is not None:
         overrides["backend"] = backend
+    if projection is not None:
+        overrides["projection"] = projection
     settings = Settings(**overrides)
     # Seed redaction with the raw URL so credentials can't leak anywhere in logs.
     install_secret_redaction(settings.secret_values())

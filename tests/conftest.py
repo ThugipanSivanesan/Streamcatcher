@@ -8,6 +8,7 @@ are spies, keeping the suite fully offline and headless (e.g. in CI).
 
 import sys
 
+import numpy as np
 import pytest
 
 
@@ -26,7 +27,8 @@ class _FakeCapture:
     def read(self):
         if self._frames_left > 0:
             self._frames_left -= 1
-            return True, object()  # a stand-in frame
+            # A tiny real array so callers can read ``frame.shape`` (360 remap).
+            return True, np.zeros((8, 16, 3), dtype=np.uint8)
         return False, None
 
     def release(self) -> None:
@@ -41,12 +43,14 @@ class _FakeCv2:
     CAP_FFMPEG = 1900
     WINDOW_NORMAL = 0
     WND_PROP_VISIBLE = 1
+    INTER_LINEAR = 1
 
     def __init__(self) -> None:
         self.captures: list[_FakeCapture] = []
         self.named_windows: list[str] = []
         self.destroyed_windows: list[str] = []
         self.imshow_calls = 0
+        self.remap_calls = 0
         # Knobs the tests set to script behaviour.
         self.open_ok = True
         self.frames = 3
@@ -64,6 +68,10 @@ class _FakeCv2:
 
     def imshow(self, title, frame) -> None:
         self.imshow_calls += 1
+
+    def remap(self, frame, map_x, map_y, interpolation):  # noqa: N802 - cv2 API
+        self.remap_calls += 1
+        return frame
 
     def waitKey(self, delay):  # noqa: N802
         if self._key_idx < len(self.keys):

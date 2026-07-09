@@ -35,6 +35,17 @@ def test_play_backend_opencv_uses_live_player(fake_cv2, caplog):
     assert "Opening live stream with OpenCV" in caplog.text
 
 
+def test_play_projection_equirect_enables_360_viewport(fake_cv2, caplog):
+    with caplog.at_level(logging.INFO):
+        result = runner.invoke(
+            app,
+            ["play", "rtsp://cam.local/stream1", "-b", "opencv", "-p", "equirect"],
+        )
+    assert result.exit_code == 0
+    assert fake_cv2.remap_calls == fake_cv2.frames  # frames were reprojected
+    assert "360 viewport" in caplog.text
+
+
 def test_play_requires_a_url():
     result = runner.invoke(app, ["play"])
     assert result.exit_code != 0
