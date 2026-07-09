@@ -33,8 +33,8 @@ def play(
         None,
         "--backend",
         "-b",
-        help="Playback backend: 'vlc' (live libVLC window) or 'stub' (offline). "
-        "Defaults to STREAMCATCHER_BACKEND, or the offline stub.",
+        help="Playback backend: 'opencv' (live OpenCV window, video only) or "
+        "'stub' (offline). Defaults to STREAMCATCHER_BACKEND, or the offline stub.",
     ),
 ) -> None:
     """Connect to URL and play the stream."""

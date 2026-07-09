@@ -25,14 +25,14 @@ def test_play_does_not_leak_credentials(caplog):
     assert "cam.local" in caplog.text  # sanitized host is still shown
 
 
-def test_play_backend_vlc_uses_live_player(fake_vlc, caplog):
+def test_play_backend_opencv_uses_live_player(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
-        result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--backend", "vlc"])
+        result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--backend", "opencv"])
     assert result.exit_code == 0
-    assert fake_vlc.last_command is not None
-    assert "rtsp://cam.local/stream1" in fake_vlc.last_command
-    assert "vlc" in caplog.text
-    assert "Launching VLC" in caplog.text
+    assert fake_cv2.last_capture is not None
+    assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"
+    assert "opencv" in caplog.text
+    assert "Opening live stream with OpenCV" in caplog.text
 
 
 def test_play_requires_a_url():

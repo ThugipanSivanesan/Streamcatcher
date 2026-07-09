@@ -1,72 +1,91 @@
 """Shared test fixtures.
 
-The ``fake_vlc`` fixture makes the live player believe VLC is installed and
-replaces ``subprocess.Popen`` with a spy, so tests exercise the VLC-launcher
-backend without spawning a real VLC window. This keeps the suite offline and
-headless (e.g. in CI).
+The ``fake_cv2`` fixture injects a fake ``cv2`` module so the OpenCV player can
+be exercised without a real decoder, window, or network. Its ``VideoCapture``
+yields a scripted number of frames and ``imshow``/``waitKey``/``getWindowProperty``
+are spies, keeping the suite fully offline and headless (e.g. in CI).
 """
+
+import sys
 
 import pytest
 
 
-class _FakeProcess:
-    """Stand-in for the VLC subprocess handle."""
+class _FakeCapture:
+    """Stand-in for ``cv2.VideoCapture`` that yields a fixed number of frames."""
 
-    def __init__(self, cmd: list[str], wait_exc: BaseException | None = None) -> None:
-        self.cmd = cmd
-        self._running = True
-        self.wait_calls = 0
-        self.terminate_calls = 0
-        self._wait_exc = wait_exc
+    def __init__(self, url: str, frames: int, opened: bool) -> None:
+        self.url = url
+        self._frames_left = frames
+        self._opened = opened
+        self.release_calls = 0
 
-    def wait(self) -> int:
-        self.wait_calls += 1
-        if self._wait_exc is not None:
-            raise self._wait_exc
-        self._running = False  # VLC window closed on its own
-        return 0
+    def isOpened(self) -> bool:  # noqa: N802 - mirrors the cv2 API name
+        return self._opened
 
-    def poll(self) -> int | None:
-        return None if self._running else 0
+    def read(self):
+        if self._frames_left > 0:
+            self._frames_left -= 1
+            return True, object()  # a stand-in frame
+        return False, None
 
-    def terminate(self) -> None:
-        self.terminate_calls += 1
-        self._running = False
+    def release(self) -> None:
+        self.release_calls += 1
+        self._opened = False
 
 
-class _VlcLauncherSpy:
-    """Records the commands the player would launch and the fake processes."""
+class _FakeCv2:
+    """Minimal fake of the ``cv2`` module used by :mod:`opencv_player`."""
+
+    # Constants the player reads off the module.
+    CAP_FFMPEG = 1900
+    WINDOW_NORMAL = 0
+    WND_PROP_VISIBLE = 1
 
     def __init__(self) -> None:
-        self.commands: list[list[str]] = []
-        self.processes: list[_FakeProcess] = []
-        # Set to simulate an interrupt (Ctrl-C) while blocking on the process.
-        self.wait_exc: BaseException | None = None
+        self.captures: list[_FakeCapture] = []
+        self.named_windows: list[str] = []
+        self.destroyed_windows: list[str] = []
+        self.imshow_calls = 0
+        # Knobs the tests set to script behaviour.
+        self.open_ok = True
+        self.frames = 3
+        self.keys: list[int] = []  # scripted waitKey return values
+        self.window_visible = 1
+        self._key_idx = 0
 
-    def spawn(self, cmd: list[str], *args: object, **kwargs: object) -> _FakeProcess:
-        proc = _FakeProcess(cmd, wait_exc=self.wait_exc)
-        self.commands.append(cmd)
-        self.processes.append(proc)
-        return proc
+    def VideoCapture(self, url, api=None):  # noqa: N802 - mirrors the cv2 API name
+        cap = _FakeCapture(url, frames=self.frames, opened=self.open_ok)
+        self.captures.append(cap)
+        return cap
+
+    def namedWindow(self, title, flags=0):  # noqa: N802
+        self.named_windows.append(title)
+
+    def imshow(self, title, frame) -> None:
+        self.imshow_calls += 1
+
+    def waitKey(self, delay):  # noqa: N802
+        if self._key_idx < len(self.keys):
+            key = self.keys[self._key_idx]
+            self._key_idx += 1
+            return key
+        return -1  # no key pressed
+
+    def getWindowProperty(self, title, prop):  # noqa: N802
+        return self.window_visible
+
+    def destroyWindow(self, title) -> None:  # noqa: N802
+        self.destroyed_windows.append(title)
 
     @property
-    def last_command(self) -> list[str] | None:
-        return self.commands[-1] if self.commands else None
-
-    @property
-    def last_process(self) -> _FakeProcess | None:
-        return self.processes[-1] if self.processes else None
+    def last_capture(self) -> _FakeCapture | None:
+        return self.captures[-1] if self.captures else None
 
 
 @pytest.fixture
-def fake_vlc(monkeypatch, tmp_path):
-    """Pretend VLC is installed and capture launches instead of running VLC."""
-    import streamcatcher.player.vlc_player as vlc_player
-
-    fake_bin = tmp_path / "vlc"
-    fake_bin.write_text("")
-    monkeypatch.setattr(vlc_player.shutil, "which", lambda _name: str(fake_bin))
-
-    spy = _VlcLauncherSpy()
-    monkeypatch.setattr(vlc_player.subprocess, "Popen", spy.spawn)
-    return spy
+def fake_cv2(monkeypatch):
+    """Inject a fake ``cv2`` so the OpenCV player runs headless and offline."""
+    fake = _FakeCv2()
+    monkeypatch.setitem(sys.modules, "cv2", fake)
+    return fake

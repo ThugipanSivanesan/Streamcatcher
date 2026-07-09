@@ -7,7 +7,7 @@ from streamcatcher.player.base import Player
 from streamcatcher.player.factory import get_player
 from streamcatcher.player.stub_player import StubPlayer
 
-# The ``fake_vlc`` fixture lives in tests/conftest.py.
+# The ``fake_cv2`` fixture lives in tests/conftest.py.
 
 
 def test_factory_returns_stub_by_default():
@@ -45,84 +45,90 @@ def test_stub_player_does_not_log_the_url(caplog):
     assert "secretpass" not in caplog.text
 
 
-# --- Live VLC-launcher backend --------------------------------------------
+# --- Live OpenCV backend ---------------------------------------------------
 #
-# The live player launches the installed VLC media player as a subprocess. The
-# ``fake_vlc`` fixture (tests/conftest.py) makes VLC appear installed and
-# replaces ``subprocess.Popen`` with a spy, so these tests never spawn a real
-# VLC window and stay fully offline/headless.
+# The live player opens the stream with OpenCV and shows frames in a window it
+# owns. The ``fake_cv2`` fixture (tests/conftest.py) injects a fake ``cv2`` whose
+# capture yields scripted frames and whose window calls are spies, so these tests
+# never touch a real decoder, window, or network and stay offline/headless.
 
 
-def test_factory_returns_vlc_player_for_vlc_backend(fake_vlc):
-    from streamcatcher.player.vlc_player import VlcPlayer
+def test_factory_returns_opencv_player_for_opencv_backend():
+    from streamcatcher.player.opencv_player import OpenCvPlayer
 
-    settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.VLC)
-    assert isinstance(get_player(settings), VlcPlayer)
-
-
-def test_vlc_player_satisfies_player_protocol(fake_vlc):
-    from streamcatcher.player.vlc_player import VlcPlayer
-
-    assert isinstance(VlcPlayer("rtsp://cam/stream"), Player)
+    settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.OPENCV)
+    assert isinstance(get_player(settings), OpenCvPlayer)
 
 
-def test_vlc_player_play_launches_vlc_with_stream_and_buffer_option(fake_vlc):
-    from streamcatcher.player.vlc_player import VlcPlayer
+def test_opencv_player_satisfies_player_protocol():
+    from streamcatcher.player.opencv_player import OpenCvPlayer
 
-    VlcPlayer("rtsp://user:pass@cam/stream").play()
-
-    cmd = fake_vlc.last_command
-    assert cmd is not None
-    assert "rtsp://user:pass@cam/stream" in cmd
-    assert any(arg.startswith("--rtsp-frame-buffer-size=") for arg in cmd)
-    # play() blocks on the process, then cleans up.
-    assert fake_vlc.last_process.wait_calls == 1
+    assert isinstance(OpenCvPlayer("rtsp://cam/stream"), Player)
 
 
-def test_vlc_player_play_stops_on_keyboard_interrupt(fake_vlc):
-    from streamcatcher.player.vlc_player import VlcPlayer
+def test_opencv_player_play_opens_stream_and_shows_frames(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
 
-    fake_vlc.wait_exc = KeyboardInterrupt()
-    VlcPlayer("rtsp://cam/stream").play()  # should swallow the interrupt
-    assert fake_vlc.last_process.terminate_calls == 1
+    OpenCvPlayer("rtsp://user:pass@cam/stream").play()
+
+    cap = fake_cv2.last_capture
+    assert cap is not None
+    assert cap.url == "rtsp://user:pass@cam/stream"
+    assert fake_cv2.imshow_calls == fake_cv2.frames  # every frame was shown
+    assert cap.release_calls == 1  # capture released on the way out
+    assert fake_cv2.destroyed_windows == ["Streamcatcher"]  # window torn down
 
 
-def test_vlc_player_is_playing_reflects_process(fake_vlc):
-    from streamcatcher.player.vlc_player import VlcPlayer
+def test_opencv_player_play_quits_on_q_key(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
 
-    player = VlcPlayer("rtsp://cam/stream")
-    assert player.is_playing() is False  # nothing launched yet
+    fake_cv2.keys = [ord("q")]
+    OpenCvPlayer("rtsp://cam/stream").play()
 
-    player._process = fake_vlc.spawn(["vlc"])
+    assert fake_cv2.imshow_calls == 1  # stopped after the first frame
+
+
+def test_opencv_player_play_stops_when_window_closed(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.window_visible = 0  # user closed the window
+    OpenCvPlayer("rtsp://cam/stream").play()
+
+    assert fake_cv2.imshow_calls == 1
+    assert fake_cv2.last_capture.release_calls == 1
+
+
+def test_opencv_player_play_raises_when_stream_unopenable(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer, StreamOpenError
+
+    fake_cv2.open_ok = False
+    with pytest.raises(StreamOpenError):
+        OpenCvPlayer("rtsp://cam/stream").play()
+
+
+def test_opencv_player_is_playing_reflects_capture(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream")
+    assert player.is_playing() is False  # nothing opened yet
+
+    player._cap = fake_cv2.VideoCapture("rtsp://cam/stream", fake_cv2.CAP_FFMPEG)
     assert player.is_playing() is True
 
-    player._process.wait()  # simulate VLC exiting
+    player._cap.release()  # simulate the stream closing
     assert player.is_playing() is False
 
 
-def test_vlc_player_snapshot_not_supported_in_interim(fake_vlc):
-    from streamcatcher.player.vlc_player import VlcPlayer
+def test_opencv_player_snapshot_not_supported_yet():
+    from streamcatcher.player.opencv_player import OpenCvPlayer
 
     with pytest.raises(NotImplementedError):
-        VlcPlayer("rtsp://cam/stream").snapshot("shot.png")
+        OpenCvPlayer("rtsp://cam/stream").snapshot("shot.png")
 
 
-def test_vlc_player_missing_vlc_raises_clear_error(monkeypatch):
-    import streamcatcher.player.vlc_player as vlc_player
-
-    monkeypatch.setattr(vlc_player.shutil, "which", lambda _name: None)
-    # Force the non-macOS path so the local VLC.app install can't satisfy it.
-    monkeypatch.setattr(vlc_player.sys, "platform", "linux")
-
-    from streamcatcher.player.vlc_player import VlcMissingError, VlcPlayer
-
-    with pytest.raises(VlcMissingError):
-        VlcPlayer("rtsp://cam/stream")
-
-
-def test_vlc_player_does_not_log_the_url(fake_vlc, caplog):
-    from streamcatcher.player.vlc_player import VlcPlayer
+def test_opencv_player_does_not_log_the_url(fake_cv2, caplog):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
 
     with caplog.at_level(logging.INFO):
-        VlcPlayer("rtsp://user:secretpass@cam.local/stream").play()
+        OpenCvPlayer("rtsp://user:secretpass@cam.local/stream").play()
     assert "secretpass" not in caplog.text

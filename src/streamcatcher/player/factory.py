@@ -1,16 +1,16 @@
 """Player factory — selects a backend from settings.
 
-Defaults to the offline stub. The live libVLC backend (:class:`VlcPlayer`)
-lazy-imports ``vlc`` inside its own module, so importing this factory never
-requires VLC to be installed — only constructing the live player does.
+Defaults to the offline stub. The live OpenCV backend (:class:`OpenCvPlayer`)
+lazy-imports ``cv2`` inside its own ``play`` method, so importing this factory
+never requires OpenCV to be installed — only playing a stream does.
 """
 
 from __future__ import annotations
 
 from streamcatcher.config import Backend, Settings
 from streamcatcher.player.base import Player
+from streamcatcher.player.opencv_player import OpenCvPlayer
 from streamcatcher.player.stub_player import StubPlayer
-from streamcatcher.player.vlc_player import VlcPlayer
 
 
 def get_player(settings: Settings) -> Player:
@@ -21,8 +21,8 @@ def get_player(settings: Settings) -> Player:
 
     if settings.backend is Backend.STUB:
         return StubPlayer(url)
-    if settings.backend is Backend.VLC:
-        return VlcPlayer(url)
+    if settings.backend is Backend.OPENCV:
+        return OpenCvPlayer(url)
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive
         f"Backend {settings.backend.value!r} is not supported."
