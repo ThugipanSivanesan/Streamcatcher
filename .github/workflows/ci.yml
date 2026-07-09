@@ -1,0 +1,46 @@
+name: CI
+on:
+  pull_request: # PR-gated; no push trigger so merges to main don't re-run CI
+  schedule: [{ cron: "0 6 * * 1" }] # weekly re-scan of main for newly-disclosed CVEs
+permissions: { contents: read }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: Lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks # CLI binary, not the action (no GitHub API -> works on forks)
+        run: |
+          V=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz" -o gl.tgz
+          tar -xzf gl.tgz gitleaks && sudo install gitleaks /usr/local/bin/gitleaks
+      - run: gitleaks detect --source . --redact --no-banner --exit-code 1
+  osv-scan:
+    name: Dependency vuln scan (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install osv-scanner
+        run: |
+          V=2.4.0
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/v${V}/osv-scanner_linux_amd64" -o osv-scanner
+          sudo install osv-scanner /usr/local/bin/osv-scanner
+      - run: osv-scanner --lockfile=uv.lock
