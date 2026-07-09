@@ -16,6 +16,14 @@ dependencies = [
     "pydantic-settings>=2.14.2",
 ]
 
+[project.optional-dependencies]
+# The HTTP control API. Kept optional so the core CLI stays lean and the package
+# imports with no web stack: `pip install streamcatcher[api]`.
+api = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+
 [project.scripts]
 streamcatcher = "streamcatcher.cli:app"
 
@@ -25,6 +33,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
     "pre-commit>=4.6.0",
+    "httpx>=0.28",  # Starlette's TestClient transport, for the API tests
 ]
 
 [build-system]

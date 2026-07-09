@@ -51,6 +51,7 @@ class _FakeCv2:
         self.destroyed_windows: list[str] = []
         self.imshow_calls = 0
         self.remap_calls = 0
+        self.imencode_calls = 0
         # Knobs the tests set to script behaviour.
         self.open_ok = True
         self.frames = 3
@@ -72,6 +73,12 @@ class _FakeCv2:
     def remap(self, frame, map_x, map_y, interpolation):  # noqa: N802 - cv2 API
         self.remap_calls += 1
         return frame
+
+    def imencode(self, ext, frame, params=None):  # noqa: N802 - mirrors the cv2 API
+        # Return a tiny stand-in for a JPEG buffer with a real JPEG SOI marker so
+        # callers get plausible bytes without a real encoder.
+        self.imencode_calls += 1
+        return True, np.frombuffer(b"\xff\xd8\xffFAKEJPEG", dtype=np.uint8)
 
     def waitKey(self, delay):  # noqa: N802
         if self._key_idx < len(self.keys):

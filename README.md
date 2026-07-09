@@ -42,7 +42,7 @@ ffmpeg app, …) is required.
 streamcatcher play rtsp://camera.local:554/stream1
 
 # View a 360° equirectangular camera with a look-around viewport
-streamcatcher play rtsp://192.168.0.201/live/live -b opencv -p equirect
+streamcatcher play rtsp://123.456.7.890/live/live -b opencv -p equirect
 
 # Use a named camera profile (sets projection + mounting offsets)
 streamcatcher play rtsp://cam/live -b opencv --profile ricoh-theta
@@ -71,11 +71,36 @@ offline development and tests; pass `-b opencv` to open a real window.
   API will sit on.
 - **CLI:** [Typer](https://typer.tiangolo.com/).
 
+## HTTP control API
+
+Install the `[api]` extra and run the server so another program — or an AI agent —
+can open sessions, drive the look-around, and pull frames:
+
+```console
+pip install 'streamcatcher[api]'
+streamcatcher serve                                   # binds 127.0.0.1:8000
+streamcatcher serve --host 0.0.0.0 --port 9000 --token changeme
+```
+
+Interactive OpenAPI docs are served at `/docs`. Key endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /session` | Open a session for a stream URL; returns an id (**the URL is never echoed back**). |
+| `GET /session/{id}/frame` | Current look-around viewport as a JPEG — how an agent "sees" now. |
+| `GET /session/{id}/panorama` | Raw, full-frame JPEG (before reprojection). |
+| `GET /session/{id}/stream.mjpg` | MJPEG stream of the viewport. |
+| `POST /session/{id}/look` | Pan/tilt/zoom by `{pan, tilt, zoom}` degree deltas. |
+| `POST /session/{id}/look/{pan_left…zoom_out}` | Discrete look steps. |
+| `GET /session/{id}/state` | Current projection and orientation. |
+| `DELETE /session/{id}` | Close the session. |
+
+The server binds `127.0.0.1` by default. Set `--token` (or `STREAMCATCHER_API_TOKEN`)
+to require an `Authorization: Bearer <token>` header on every request. Stream URLs
+and their credentials are never returned in any response.
+
 ## Roadmap
 
-- **HTTP control API** (`streamcatcher serve`, FastAPI) so another program or AI
-  agent can open a session, drive the look-around, and pull frames as JPEG stills
-  or an MJPEG stream.
 - **Snapshots:** live `s` hotkey plus a one-shot `--snapshot out.png`.
 - **Auto-reconnect** with backoff when a stream drops.
 

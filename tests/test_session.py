@@ -128,8 +128,8 @@ def test_flat_session_look_is_a_noop():
 
 def test_session_does_not_log_the_url(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
-        StreamSession("rtsp://user:secretpass@cam.local/stream").open()
-    assert "secretpass" not in caplog.text
+        StreamSession("rtsp://user:changeme@cam.local/stream").open()
+    assert "changeme" not in caplog.text
 
 
 # --- camera-profile-driven viewports ---------------------------------------

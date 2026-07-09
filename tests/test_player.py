@@ -42,8 +42,8 @@ def test_stub_player_lifecycle():
 
 def test_stub_player_does_not_log_the_url(caplog):
     with caplog.at_level(logging.INFO):
-        StubPlayer("rtsp://user:secretpass@cam.local/stream").play()
-    assert "secretpass" not in caplog.text
+        StubPlayer("rtsp://user:changeme@cam.local/stream").play()
+    assert "changeme" not in caplog.text
 
 
 # --- Live OpenCV backend ---------------------------------------------------
@@ -131,8 +131,8 @@ def test_opencv_player_does_not_log_the_url(fake_cv2, caplog):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 
     with caplog.at_level(logging.INFO):
-        OpenCvPlayer("rtsp://user:secretpass@cam.local/stream").play()
-    assert "secretpass" not in caplog.text
+        OpenCvPlayer("rtsp://user:changeme@cam.local/stream").play()
+    assert "changeme" not in caplog.text
 
 
 # --- 360 equirectangular viewport ------------------------------------------
