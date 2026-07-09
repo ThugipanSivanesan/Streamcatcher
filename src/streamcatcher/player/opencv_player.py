@@ -15,9 +15,11 @@ importing this module never requires OpenCV; tests inject a fake ``cv2``.
 from __future__ import annotations
 
 import logging
+import time
 
 from streamcatcher.config import Projection
 from streamcatcher.player.profiles import CameraProfile
+from streamcatcher.player.reconnect import ReconnectPolicy, backoff_delays
 from streamcatcher.player.session import StreamOpenError, StreamSession, _load_cv2
 
 __all__ = ["OpenCvPlayer", "StreamOpenError"]
@@ -45,8 +47,10 @@ class OpenCvPlayer:
         url: str,
         projection: Projection = Projection.FLAT,
         profile: CameraProfile | None = None,
+        reconnect: ReconnectPolicy | None = None,
     ) -> None:
         self._session = StreamSession(url, projection, profile)
+        self._policy = reconnect or ReconnectPolicy()
         self._window_open = False
 
     def play(self) -> None:
@@ -62,9 +66,12 @@ class OpenCvPlayer:
             while True:
                 frame = self._session.read_frame()
                 if frame is None:
-                    # Stream ended or dropped. Robust reconnect/backoff is a later slice.
-                    log.info("Stream ended or dropped.")
-                    break
+                    if not self._policy.enabled:
+                        log.info("Stream ended or dropped.")
+                        break
+                    if not self._reconnect(cv2):
+                        break  # the user quit while we were reconnecting
+                    continue  # reconnected — resume reading frames
                 cv2.imshow(_WINDOW_TITLE, self._session.render(frame))
                 key = cv2.waitKey(_WAITKEY_MS) & 0xFF
                 if key == ord("q"):
@@ -76,6 +83,36 @@ class OpenCvPlayer:
             log.info("Interrupted — closing the stream.")
         finally:
             self.stop()
+
+    def _reconnect(self, cv2) -> bool:
+        """Retry a dropped stream with exponential backoff.
+
+        Returns ``True`` once the stream is back, or ``False`` if the user quit
+        (``q`` or closed the window) while we were down. Ctrl-C propagates to
+        :meth:`play`'s handler. The stream URL is never logged.
+        """
+        log.info("Connection lost — reconnecting…")
+        for delay in backoff_delays(self._policy):
+            log.info("Retrying in %.0fs…", delay)
+            if self._wait_or_quit(cv2, delay):
+                return False
+            if self._session.reconnect():
+                log.info("Reconnected.")
+                return True
+        return False  # pragma: no cover - backoff_delays never ends
+
+    def _wait_or_quit(self, cv2, delay: float) -> bool:
+        """Wait ``delay`` seconds, staying responsive; ``True`` if the user quit."""
+        if self._quit_requested(cv2):
+            return True
+        time.sleep(delay)
+        return self._quit_requested(cv2)
+
+    def _quit_requested(self, cv2) -> bool:
+        """Whether the user pressed 'q' or closed the window (pumps the GUI)."""
+        if (cv2.waitKey(_WAITKEY_MS) & 0xFF) == ord("q"):
+            return True
+        return cv2.getWindowProperty(_WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1
 
     def _dispatch_key(self, key: int) -> None:
         """Route a look-around key press to the session (no-op unless 360)."""

@@ -53,6 +53,13 @@ def play(
         "and any mounting offsets, overriding --projection. Defaults to "
         "STREAMCATCHER_PROFILE.",
     ),
+    reconnect: bool | None = typer.Option(
+        None,
+        "--reconnect/--no-reconnect",
+        help="Auto-reconnect with backoff when the stream drops (default), or "
+        "--no-reconnect to exit on the first drop. Defaults to "
+        "STREAMCATCHER_RECONNECT_ENABLED.",
+    ),
 ) -> None:
     """Connect to URL and play the stream."""
     # Pass flags only when given so the STREAMCATCHER_* env vars still apply as
@@ -64,6 +71,8 @@ def play(
         overrides["projection"] = projection
     if profile is not None:
         overrides["profile"] = profile
+    if reconnect is not None:
+        overrides["reconnect_enabled"] = reconnect
     settings = Settings(**overrides)
     # Seed redaction with the raw URL so credentials can't leak anywhere in logs.
     install_secret_redaction(settings.secret_values())
