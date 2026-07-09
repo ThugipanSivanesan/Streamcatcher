@@ -1,88 +1,91 @@
-"""Live stream player backed by libVLC (python-vlc).
+"""Live stream player that launches the system VLC media player.
 
-The ``vlc`` binding is imported lazily inside :func:`_load_vlc` rather than at
-module import time, so importing this module — and the player factory — never
-requires libVLC to be installed. Only actually constructing a :class:`VlcPlayer`
-loads the native library, which lets the rest of the app and the whole test
-suite run fully offline.
+Interim implementation. Embedding libVLC in a window we own requires a native
+drawable (``NSView`` / ``HWND`` / X window) and an event loop — on macOS a plain
+Python CLI has neither, so libVLC decodes but cannot create a video output. Until
+the embedded-window backend lands in a later slice, we hand the stream URL to the
+installed VLC application, which opens its own audio+video window. This works on
+any platform where VLC is installed.
 """
 
 from __future__ import annotations
 
 import logging
-import time
-from typing import Any
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
 log = logging.getLogger("streamcatcher.player.vlc")
 
-# Seconds between playback-state checks while blocking in :meth:`VlcPlayer.play`.
-_POLL_INTERVAL = 0.25
+# libVLC's default RTSP receive buffer is 250 KB, which truncates high-resolution
+# camera frames ("total received frame size exceeds the client's buffer size").
+# Give VLC a roomier buffer so full frames arrive intact.
+_RTSP_FRAME_BUFFER_BYTES = 2_000_000
+
+# Standard macOS install location, used when ``vlc`` isn't on PATH.
+_MACOS_VLC = Path("/Applications/VLC.app/Contents/MacOS/VLC")
 
 
 class VlcMissingError(RuntimeError):
-    """Raised when the libVLC runtime / python-vlc binding cannot be loaded."""
+    """Raised when the VLC media player executable cannot be located."""
 
 
 _INSTALL_HINT = (
-    "libVLC is required for the live player but could not be loaded. Install the "
-    "VLC media player (https://www.videolan.org/vlc/) so the native libVLC library "
-    "is available, then reinstall the 'python-vlc' package."
+    "Could not find the VLC media player. Install VLC (https://www.videolan.org/vlc/) "
+    "and make sure the 'vlc' command is on your PATH."
 )
 
 
-def _load_vlc() -> Any:
-    """Import and return the ``vlc`` module, or raise :class:`VlcMissingError`."""
-    try:
-        import vlc  # noqa: PLC0415 (lazy import is intentional — see module docstring)
-    except (ImportError, OSError) as exc:  # OSError: binding present but libVLC missing
-        raise VlcMissingError(_INSTALL_HINT) from exc
-    return vlc
+def _find_vlc() -> str:
+    """Return the path to the VLC executable, or raise :class:`VlcMissingError`."""
+    on_path = shutil.which("vlc")
+    if on_path:
+        return on_path
+    if sys.platform == "darwin" and _MACOS_VLC.exists():
+        return str(_MACOS_VLC)
+    raise VlcMissingError(_INSTALL_HINT)
 
 
 class VlcPlayer:
-    """Play a live RTMP/RTSP stream (audio + video) in a libVLC window."""
+    """Play a live RTMP/RTSP stream by launching the VLC media player."""
 
     def __init__(self, url: str) -> None:
         self._url = url  # secret: embeds credentials, so it is never logged
-        self._vlc = _load_vlc()
-        instance = self._vlc.Instance()
-        if instance is None:  # libVLC failed to initialise (e.g. no codecs found)
-            raise VlcMissingError(_INSTALL_HINT)
-        self._instance = instance
-        self._player = instance.media_player_new()
+        self._vlc_bin = _find_vlc()
+        self._process: subprocess.Popen | None = None
+
+    def _command(self) -> list[str]:
+        return [
+            self._vlc_bin,
+            f"--rtsp-frame-buffer-size={_RTSP_FRAME_BUFFER_BYTES}",
+            self._url,
+        ]
 
     def play(self) -> None:
-        """Open the stream, start playback, and block until it stops."""
-        media = self._instance.media_new(self._url)
-        self._player.set_media(media)
-        log.info("Opening live stream via libVLC.")
-        self._player.play()
-        self._wait_until_stopped()
-
-    def _wait_until_stopped(self) -> None:
-        """Block while the stream plays; stop cleanly on end or interrupt."""
+        """Launch VLC on the stream and block until its window closes."""
+        log.info("Launching VLC to view the live stream.")
+        self._process = subprocess.Popen(self._command())
         try:
-            while True:
-                # Sleep first so libVLC has a moment to start buffering before the
-                # first state check (otherwise is_playing() may still be False).
-                time.sleep(_POLL_INTERVAL)
-                if not self._player.is_playing():
-                    break
+            self._process.wait()
         except KeyboardInterrupt:
-            log.info("Interrupted — stopping playback.")
+            log.info("Interrupted — closing VLC.")
         finally:
             self.stop()
 
     def stop(self) -> None:
-        """Stop playback and release the decoder/window."""
-        self._player.stop()
+        """Terminate the VLC process if it is still running."""
+        if self._process is not None and self._process.poll() is None:
+            self._process.terminate()
         log.info("Live player: stopped.")
 
     def snapshot(self, path: str) -> None:
-        """Save a single still frame from the current video to ``path``."""
-        self._player.video_take_snapshot(0, path, 0, 0)
-        log.info("Live player: snapshot saved to %s.", path)
+        """Not supported by the interim launcher — see the module docstring."""
+        raise NotImplementedError(
+            "Snapshots aren't supported by the interim VLC-launcher backend; "
+            "they arrive with the embedded-window player in a later slice."
+        )
 
     def is_playing(self) -> bool:
-        """Whether libVLC currently reports active playback."""
-        return bool(self._player.is_playing())
+        """Whether the VLC process is currently running."""
+        return self._process is not None and self._process.poll() is None
