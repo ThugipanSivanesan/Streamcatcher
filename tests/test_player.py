@@ -113,10 +113,10 @@ def test_opencv_player_is_playing_reflects_capture(fake_cv2):
     player = OpenCvPlayer("rtsp://cam/stream")
     assert player.is_playing() is False  # nothing opened yet
 
-    player._cap = fake_cv2.VideoCapture("rtsp://cam/stream", fake_cv2.CAP_FFMPEG)
+    player._session.open()
     assert player.is_playing() is True
 
-    player._cap.release()  # simulate the stream closing
+    player._session.close()  # simulate the stream closing
     assert player.is_playing() is False
 
 
@@ -148,7 +148,7 @@ def test_factory_passes_projection_to_opencv_player():
     )
     player = get_player(settings)
     assert isinstance(player, OpenCvPlayer)
-    assert player._view is not None  # 360 viewport enabled
+    assert player._session.is_360  # 360 viewport enabled
 
 
 def test_opencv_player_flat_does_not_reproject(fake_cv2):
@@ -176,7 +176,7 @@ def test_opencv_player_360_pans_on_key(fake_cv2):
     player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT)
     player.play()
 
-    assert player._view.yaw_deg == YAW_STEP  # the viewport panned right
+    assert player._session.state().yaw_deg == YAW_STEP  # the viewport panned right
 
 
 def test_opencv_player_360_tilts_and_zooms_on_keys(fake_cv2):
@@ -187,5 +187,6 @@ def test_opencv_player_360_tilts_and_zooms_on_keys(fake_cv2):
     player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT)
     player.play()
 
-    assert player._view.pitch_deg == 2 * PITCH_STEP  # tilted up twice
-    assert player._view.hfov_deg == 100.0 - ZOOM_STEP  # zoomed in once
+    state = player._session.state()
+    assert state.pitch_deg == 2 * PITCH_STEP  # tilted up twice
+    assert state.hfov_deg == 100.0 - ZOOM_STEP  # zoomed in once
