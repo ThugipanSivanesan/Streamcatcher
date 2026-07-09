@@ -71,5 +71,9 @@ def install_secret_redaction(
         root.addHandler(handler)
     redaction_filter = SecretRedactingFilter(secret_values)
     for handler in root.handlers:
+        # Drop any previously-installed redaction filter so repeated calls don't
+        # pile filters up on the shared handler.
+        for existing in [f for f in handler.filters if isinstance(f, SecretRedactingFilter)]:
+            handler.removeFilter(existing)
         handler.addFilter(redaction_filter)
     return redaction_filter

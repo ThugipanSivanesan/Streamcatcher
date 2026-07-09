@@ -15,6 +15,9 @@ dependencies = [
     "pydantic-settings>=2.14.2",
 ]
 
+[project.scripts]
+streamcatcher = "streamcatcher.cli:app"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
