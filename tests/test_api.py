@@ -15,7 +15,7 @@ import pytest
 
 from streamcatcher.config import Settings
 
-URL = "rtsp://user:secretpass@cam.local/live"
+URL = "rtsp://user:changeme@cam.local/live"
 
 
 def _create_app(fake_cv2, **overrides):
@@ -45,7 +45,7 @@ def test_create_returns_id_and_never_echoes_the_url(client):
     assert body["projection"] == "flat"
     # The URL and its embedded credentials must not appear anywhere in the body.
     assert URL not in resp.text
-    assert "secretpass" not in resp.text
+    assert "changeme" not in resp.text
 
 
 def test_create_equirect_exposes_viewport_state(client):
@@ -169,11 +169,11 @@ def test_unknown_discrete_action_is_404(client):
 def test_token_is_enforced_when_configured(fake_cv2):
     from fastapi.testclient import TestClient
 
-    with TestClient(_create_app(fake_cv2, api_token="s3cr3t")) as client:
+    with TestClient(_create_app(fake_cv2, api_token="changeme")) as client:
         assert client.get("/sessions").status_code == 401
         assert client.post("/session", json={"url": URL}).status_code == 401
 
-        auth = {"Authorization": "Bearer s3cr3t"}
+        auth = {"Authorization": "Bearer changeme"}
         assert client.post("/session", json={"url": URL}, headers=auth).status_code == 201
         assert client.get("/sessions", headers=auth).status_code == 200
         assert client.get("/sessions", headers={"Authorization": "Bearer wrong"}).status_code == 401

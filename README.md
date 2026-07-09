@@ -42,7 +42,7 @@ ffmpeg app, …) is required.
 streamcatcher play rtsp://camera.local:554/stream1
 
 # View a 360° equirectangular camera with a look-around viewport
-streamcatcher play rtsp://192.168.0.201/live/live -b opencv -p equirect
+streamcatcher play rtsp://123.456.7.890/live/live -b opencv -p equirect
 
 # Use a named camera profile (sets projection + mounting offsets)
 streamcatcher play rtsp://cam/live -b opencv --profile ricoh-theta
@@ -79,7 +79,7 @@ can open sessions, drive the look-around, and pull frames:
 ```console
 pip install 'streamcatcher[api]'
 streamcatcher serve                                   # binds 127.0.0.1:8000
-streamcatcher serve --host 0.0.0.0 --port 9000 --token s3cr3t
+streamcatcher serve --host 0.0.0.0 --port 9000 --token changeme
 ```
 
 Interactive OpenAPI docs are served at `/docs`. Key endpoints:
