@@ -19,3 +19,6 @@ build/
 snapshots/
 *.png
 !docs/**/*.png
+
+# Internal planning doc — keep out of the public repo
+docs/plan.html
