@@ -41,6 +41,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "W"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Typer uses call markers (typer.Option/typer.Argument) as parameter defaults by
+# design; these are not the mutable-default hazard B008 targets.
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
 [tool.pytest.ini_options]
 addopts = "-q --cov=streamcatcher --cov-report=term-missing"
 testpaths = ["tests"]
