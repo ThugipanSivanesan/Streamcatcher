@@ -11,6 +11,7 @@ from streamcatcher.config import Backend, Settings
 from streamcatcher.player.base import Player
 from streamcatcher.player.opencv_player import OpenCvPlayer
 from streamcatcher.player.profiles import get_profile
+from streamcatcher.player.reconnect import ReconnectPolicy
 from streamcatcher.player.stub_player import StubPlayer
 
 
@@ -26,7 +27,13 @@ def get_player(settings: Settings) -> Player:
         # A named profile (if given) carries its own projection + mounting
         # offsets and takes precedence over the bare ``--projection``.
         profile = get_profile(settings.profile) if settings.profile else None
-        return OpenCvPlayer(url, projection=settings.projection, profile=profile)
+        policy = ReconnectPolicy(
+            enabled=settings.reconnect_enabled,
+            base_delay=settings.reconnect_base_delay,
+            factor=settings.reconnect_backoff_factor,
+            max_delay=settings.reconnect_max_delay,
+        )
+        return OpenCvPlayer(url, projection=settings.projection, profile=profile, reconnect=policy)
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive
         f"Backend {settings.backend.value!r} is not supported."

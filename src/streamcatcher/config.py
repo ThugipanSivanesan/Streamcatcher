@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     projection: Projection = Projection.FLAT
     profile: str | None = None  # named camera preset; overrides ``projection`` when set
 
+    # Auto-reconnect (live OpenCV backend). On a dropped stream the player
+    # retries forever with exponential backoff until it returns or the user
+    # quits; disable to exit on the first drop (e.g. for a finite source).
+    reconnect_enabled: bool = True
+    reconnect_base_delay: float = 1.0  # seconds before the first retry
+    reconnect_backoff_factor: float = 2.0  # multiply the wait after each failure
+    reconnect_max_delay: float = 30.0  # cap on the backoff wait, in seconds
+
     # HTTP control API (`streamcatcher serve`). All optional; sensible for a
     # single-user, localhost-bound control surface.
     api_token: SecretStr | None = None  # when set, require this bearer token on every route

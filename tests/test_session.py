@@ -132,6 +132,45 @@ def test_session_does_not_log_the_url(fake_cv2, caplog):
     assert "changeme" not in caplog.text
 
 
+# --- reconnect --------------------------------------------------------------
+
+
+def test_reconnect_reopens_a_fresh_capture(fake_cv2):
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+    first = fake_cv2.last_capture
+
+    assert session.reconnect() is True
+    assert session.is_open() is True
+    assert first.release_calls == 1  # old capture released
+    assert fake_cv2.last_capture is not first  # a new capture was opened
+
+
+def test_reconnect_returns_false_when_stream_unopenable(fake_cv2):
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+
+    fake_cv2.open_ok = False  # stream is now down
+    assert session.reconnect() is False
+    assert session.is_open() is False
+
+
+def test_reconnect_preserves_viewport_orientation(fake_cv2):
+    session = StreamSession("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    session.open()
+    session.pan_right()
+    session.tilt_up()
+    before = session.state()
+
+    assert session.reconnect() is True
+    after = session.state()
+    assert (after.yaw_deg, after.pitch_deg, after.hfov_deg) == (
+        before.yaw_deg,
+        before.pitch_deg,
+        before.hfov_deg,
+    )
+
+
 # --- camera-profile-driven viewports ---------------------------------------
 
 

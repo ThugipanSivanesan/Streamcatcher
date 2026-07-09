@@ -58,9 +58,22 @@ class _FakeCv2:
         self.keys: list[int] = []  # scripted waitKey return values
         self.window_visible = 1
         self._key_idx = 0
+        # Reconnect-test knobs. ``open_results`` scripts each VideoCapture's
+        # opened state (e.g. [True, False, True] to fail one reconnect before
+        # succeeding); once exhausted it falls back to ``open_ok``.
+        # ``close_window_after_captures`` reports the window closed once more
+        # than N captures exist, giving retry-forever tests a deterministic exit.
+        self.open_results: list[bool] | None = None
+        self.close_window_after_captures: int | None = None
+        self._open_idx = 0
 
     def VideoCapture(self, url, api=None):  # noqa: N802 - mirrors the cv2 API name
-        cap = _FakeCapture(url, frames=self.frames, opened=self.open_ok)
+        if self.open_results is not None and self._open_idx < len(self.open_results):
+            opened = self.open_results[self._open_idx]
+            self._open_idx += 1
+        else:
+            opened = self.open_ok
+        cap = _FakeCapture(url, frames=self.frames, opened=opened)
         self.captures.append(cap)
         return cap
 
@@ -88,6 +101,11 @@ class _FakeCv2:
         return -1  # no key pressed
 
     def getWindowProperty(self, title, prop):  # noqa: N802
+        if (
+            self.close_window_after_captures is not None
+            and len(self.captures) > self.close_window_after_captures
+        ):
+            return 0  # user "closed" the window once enough captures were opened
         return self.window_visible
 
     def destroyWindow(self, title) -> None:  # noqa: N802

@@ -27,7 +27,9 @@ def test_play_does_not_leak_credentials(caplog):
 
 def test_play_backend_opencv_uses_live_player(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
-        result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--backend", "opencv"])
+        result = runner.invoke(
+            app, ["play", "rtsp://cam.local/stream1", "--backend", "opencv", "--no-reconnect"]
+        )
     assert result.exit_code == 0
     assert fake_cv2.last_capture is not None
     assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"
@@ -39,7 +41,15 @@ def test_play_projection_equirect_enables_360_viewport(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
         result = runner.invoke(
             app,
-            ["play", "rtsp://cam.local/stream1", "-b", "opencv", "-p", "equirect"],
+            [
+                "play",
+                "rtsp://cam.local/stream1",
+                "-b",
+                "opencv",
+                "-p",
+                "equirect",
+                "--no-reconnect",
+            ],
         )
     assert result.exit_code == 0
     assert fake_cv2.remap_calls == fake_cv2.frames  # frames were reprojected
@@ -50,7 +60,15 @@ def test_play_profile_selects_a_camera_and_reprojects(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
         result = runner.invoke(
             app,
-            ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--profile", "generic-360"],
+            [
+                "play",
+                "rtsp://cam.local/stream1",
+                "-b",
+                "opencv",
+                "--profile",
+                "generic-360",
+                "--no-reconnect",
+            ],
         )
     assert result.exit_code == 0
     assert fake_cv2.remap_calls == fake_cv2.frames  # equirect profile reprojected

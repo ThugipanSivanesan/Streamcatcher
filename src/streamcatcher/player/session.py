@@ -132,6 +132,23 @@ class StreamSession:
             self._cap = None
         log.info("Stream session closed.")
 
+    def reconnect(self) -> bool:
+        """Tear down and re-open the capture, keeping the viewport orientation.
+
+        Returns ``True`` on success, or ``False`` if the stream still can't be
+        opened (so the caller can back off and retry). The viewport ``_view``
+        (yaw/pitch/hfov) is left untouched, so a look-around orientation
+        survives a reconnect; cached remap tables are dropped in case the
+        stream returns at a different resolution.
+        """
+        self.close()
+        self._maps = None
+        try:
+            self.open()
+        except StreamOpenError:
+            return False
+        return True
+
     def is_open(self) -> bool:
         """Whether a stream capture is currently open."""
         return self._cap is not None and self._cap.isOpened()
