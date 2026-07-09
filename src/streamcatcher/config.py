@@ -19,7 +19,7 @@ class Backend(StrEnum):
     """Playback backend that the player factory dispatches on."""
 
     STUB = "stub"  # offline default: no window, deterministic, used by tests
-    VLC = "vlc"  # live libVLC player (wired in a later slice)
+    OPENCV = "opencv"  # live OpenCV player (video only, owns its own window)
 
 
 def strip_url_credentials(url: str) -> str:
