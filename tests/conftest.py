@@ -1,76 +1,72 @@
 """Shared test fixtures.
 
-The ``fake_vlc`` fixture injects a stand-in ``vlc`` module into ``sys.modules``
-so the live player's lazy ``import vlc`` picks it up. This keeps the whole suite
-runnable offline and headless (e.g. in CI) without libVLC installed.
+The ``fake_vlc`` fixture makes the live player believe VLC is installed and
+replaces ``subprocess.Popen`` with a spy, so tests exercise the VLC-launcher
+backend without spawning a real VLC window. This keeps the suite offline and
+headless (e.g. in CI).
 """
-
-import sys
 
 import pytest
 
 
-class _FakeMediaPlayer:
-    def __init__(self) -> None:
-        self.media: object | None = None
-        self._playing = False
-        self.play_calls = 0
-        self.stop_calls = 0
-        self.snapshots: list[str] = []
-        # Optional scripted return values for ``is_playing`` — each call pops the
-        # next value, letting a test drive the blocking playback loop.
-        self.play_states: list[int] | None = None
+class _FakeProcess:
+    """Stand-in for the VLC subprocess handle."""
 
-    def set_media(self, media: object) -> None:
-        self.media = media
+    def __init__(self, cmd: list[str], wait_exc: BaseException | None = None) -> None:
+        self.cmd = cmd
+        self._running = True
+        self.wait_calls = 0
+        self.terminate_calls = 0
+        self._wait_exc = wait_exc
 
-    def play(self) -> int:
-        self.play_calls += 1
-        self._playing = True
+    def wait(self) -> int:
+        self.wait_calls += 1
+        if self._wait_exc is not None:
+            raise self._wait_exc
+        self._running = False  # VLC window closed on its own
         return 0
 
-    def stop(self) -> None:
-        self.stop_calls += 1
-        self._playing = False
+    def poll(self) -> int | None:
+        return None if self._running else 0
 
-    def is_playing(self) -> int:
-        if self.play_states is not None:
-            return self.play_states.pop(0) if self.play_states else 0
-        return 1 if self._playing else 0
-
-    def video_take_snapshot(self, num: int, path: str, width: int, height: int) -> int:
-        self.snapshots.append(path)
-        return 0
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+        self._running = False
 
 
-class _FakeInstance:
+class _VlcLauncherSpy:
+    """Records the commands the player would launch and the fake processes."""
+
     def __init__(self) -> None:
-        self.player = _FakeMediaPlayer()
-        self.medias: list[str] = []
+        self.commands: list[list[str]] = []
+        self.processes: list[_FakeProcess] = []
+        # Set to simulate an interrupt (Ctrl-C) while blocking on the process.
+        self.wait_exc: BaseException | None = None
 
-    def media_player_new(self) -> _FakeMediaPlayer:
-        return self.player
+    def spawn(self, cmd: list[str], *args: object, **kwargs: object) -> _FakeProcess:
+        proc = _FakeProcess(cmd, wait_exc=self.wait_exc)
+        self.commands.append(cmd)
+        self.processes.append(proc)
+        return proc
 
-    def media_new(self, url: str) -> tuple[str, str]:
-        self.medias.append(url)
-        return ("media", url)
+    @property
+    def last_command(self) -> list[str] | None:
+        return self.commands[-1] if self.commands else None
 
-
-class _FakeVlc:
-    def __init__(self) -> None:
-        self.instance = _FakeInstance()
-
-    def Instance(self, *args: object, **kwargs: object) -> _FakeInstance:  # noqa: N802 (vlc API)
-        return self.instance
+    @property
+    def last_process(self) -> _FakeProcess | None:
+        return self.processes[-1] if self.processes else None
 
 
 @pytest.fixture
-def fake_vlc(monkeypatch):
-    """Inject a fake ``vlc`` module and neutralise the playback poll sleep."""
-    fake = _FakeVlc()
-    monkeypatch.setitem(sys.modules, "vlc", fake)
-
+def fake_vlc(monkeypatch, tmp_path):
+    """Pretend VLC is installed and capture launches instead of running VLC."""
     import streamcatcher.player.vlc_player as vlc_player
 
-    monkeypatch.setattr(vlc_player.time, "sleep", lambda _seconds: None)
-    return fake
+    fake_bin = tmp_path / "vlc"
+    fake_bin.write_text("")
+    monkeypatch.setattr(vlc_player.shutil, "which", lambda _name: str(fake_bin))
+
+    spy = _VlcLauncherSpy()
+    monkeypatch.setattr(vlc_player.subprocess, "Popen", spy.spawn)
+    return spy

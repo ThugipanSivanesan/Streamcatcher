@@ -26,13 +26,13 @@ def test_play_does_not_leak_credentials(caplog):
 
 
 def test_play_backend_vlc_uses_live_player(fake_vlc, caplog):
-    fake_vlc.instance.player.play_states = [1, 0]
     with caplog.at_level(logging.INFO):
         result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--backend", "vlc"])
     assert result.exit_code == 0
-    assert fake_vlc.instance.player.play_calls == 1
+    assert fake_vlc.last_command is not None
+    assert "rtsp://cam.local/stream1" in fake_vlc.last_command
     assert "vlc" in caplog.text
-    assert "libVLC" in caplog.text
+    assert "Launching VLC" in caplog.text
 
 
 def test_play_requires_a_url():
