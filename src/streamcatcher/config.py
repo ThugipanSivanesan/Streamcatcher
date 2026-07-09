@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     projection: Projection = Projection.FLAT
     profile: str | None = None  # named camera preset; overrides ``projection`` when set
 
+    # HTTP control API (`streamcatcher serve`). All optional; sensible for a
+    # single-user, localhost-bound control surface.
+    api_token: SecretStr | None = None  # when set, require this bearer token on every route
+    api_idle_timeout: int = 300  # seconds of inactivity before a session is reaped
+    api_max_sessions: int = 8  # cap on concurrent sessions, to bound resource use
+    api_stream_fps: int = 10  # frame rate cap for the MJPEG stream
+
     def secret_values(self) -> list[str]:
         """Plaintext credentials from the stream URL, to seed log redaction.
 

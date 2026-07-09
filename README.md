@@ -71,11 +71,36 @@ offline development and tests; pass `-b opencv` to open a real window.
   API will sit on.
 - **CLI:** [Typer](https://typer.tiangolo.com/).
 
+## HTTP control API
+
+Install the `[api]` extra and run the server so another program — or an AI agent —
+can open sessions, drive the look-around, and pull frames:
+
+```console
+pip install 'streamcatcher[api]'
+streamcatcher serve                                   # binds 127.0.0.1:8000
+streamcatcher serve --host 0.0.0.0 --port 9000 --token s3cr3t
+```
+
+Interactive OpenAPI docs are served at `/docs`. Key endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /session` | Open a session for a stream URL; returns an id (**the URL is never echoed back**). |
+| `GET /session/{id}/frame` | Current look-around viewport as a JPEG — how an agent "sees" now. |
+| `GET /session/{id}/panorama` | Raw, full-frame JPEG (before reprojection). |
+| `GET /session/{id}/stream.mjpg` | MJPEG stream of the viewport. |
+| `POST /session/{id}/look` | Pan/tilt/zoom by `{pan, tilt, zoom}` degree deltas. |
+| `POST /session/{id}/look/{pan_left…zoom_out}` | Discrete look steps. |
+| `GET /session/{id}/state` | Current projection and orientation. |
+| `DELETE /session/{id}` | Close the session. |
+
+The server binds `127.0.0.1` by default. Set `--token` (or `STREAMCATCHER_API_TOKEN`)
+to require an `Authorization: Bearer <token>` header on every request. Stream URLs
+and their credentials are never returned in any response.
+
 ## Roadmap
 
-- **HTTP control API** (`streamcatcher serve`, FastAPI) so another program or AI
-  agent can open a session, drive the look-around, and pull frames as JPEG stills
-  or an MJPEG stream.
 - **Snapshots:** live `s` hotkey plus a one-shot `--snapshot out.png`.
 - **Auto-reconnect** with backoff when a stream drops.
 

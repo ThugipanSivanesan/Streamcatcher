@@ -74,6 +74,42 @@ def play(
     log.info("Backend: %s", settings.backend.value)
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Address to bind. Defaults to localhost only."),
+    port: int = typer.Option(8000, help="Port to listen on."),
+    token: str | None = typer.Option(
+        None,
+        "--token",
+        help="Require this bearer token on every request. Defaults to "
+        "STREAMCATCHER_API_TOKEN; unset means no auth (localhost only).",
+    ),
+) -> None:
+    """Run the HTTP control API so other programs can drive stream sessions."""
+    try:
+        import fastapi  # noqa: F401 - presence check for the optional [api] extra
+        import uvicorn
+    except ModuleNotFoundError:
+        typer.secho(
+            "The HTTP API needs the optional '[api]' extra. Install it with:\n"
+            "    pip install 'streamcatcher[api]'",
+            err=True,
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1) from None
+
+    from streamcatcher.api.app import create_app
+
+    # Pass --token only when given so STREAMCATCHER_API_TOKEN stays the default.
+    overrides: dict[str, object] = {}
+    if token is not None:
+        overrides["api_token"] = token
+    application = create_app(Settings(**overrides))
+
+    log.info("Serving Streamcatcher control API on http://%s:%d", host, port)
+    uvicorn.run(application, host=host, port=port, log_level="info")
+
+
 def main() -> None:
     app()
 
