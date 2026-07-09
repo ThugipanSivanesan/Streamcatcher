@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 
 from streamcatcher.config import Projection
+from streamcatcher.player.profiles import CameraProfile
 from streamcatcher.player.session import StreamOpenError, StreamSession, _load_cv2
 
 __all__ = ["OpenCvPlayer", "StreamOpenError"]
@@ -39,8 +40,13 @@ class OpenCvPlayer:
     ``Projection.FLAT`` (the default) shows frames unchanged.
     """
 
-    def __init__(self, url: str, projection: Projection = Projection.FLAT) -> None:
-        self._session = StreamSession(url, projection)
+    def __init__(
+        self,
+        url: str,
+        projection: Projection = Projection.FLAT,
+        profile: CameraProfile | None = None,
+    ) -> None:
+        self._session = StreamSession(url, projection, profile)
         self._window_open = False
 
     def play(self) -> None:

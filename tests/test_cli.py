@@ -46,6 +46,24 @@ def test_play_projection_equirect_enables_360_viewport(fake_cv2, caplog):
     assert "360 viewport" in caplog.text
 
 
+def test_play_profile_selects_a_camera_and_reprojects(fake_cv2, caplog):
+    with caplog.at_level(logging.INFO):
+        result = runner.invoke(
+            app,
+            ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--profile", "generic-360"],
+        )
+    assert result.exit_code == 0
+    assert fake_cv2.remap_calls == fake_cv2.frames  # equirect profile reprojected
+
+
+def test_play_unknown_profile_fails(fake_cv2):
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--profile", "no-such-cam"],
+    )
+    assert result.exit_code != 0
+
+
 def test_play_requires_a_url():
     result = runner.invoke(app, ["play"])
     assert result.exit_code != 0

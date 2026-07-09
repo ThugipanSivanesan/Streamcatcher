@@ -151,6 +151,23 @@ def test_factory_passes_projection_to_opencv_player():
     assert player._session.is_360  # 360 viewport enabled
 
 
+def test_factory_resolves_named_profile():
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    settings = Settings(
+        stream_url="rtsp://cam/stream", backend=Backend.OPENCV, profile="generic-fisheye"
+    )
+    player = get_player(settings)
+    assert isinstance(player, OpenCvPlayer)
+    assert player._session.state().projection == "fisheye"  # profile drove the view
+
+
+def test_factory_rejects_unknown_profile():
+    settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.OPENCV, profile="bogus")
+    with pytest.raises(ValueError):
+        get_player(settings)
+
+
 def test_opencv_player_flat_does_not_reproject(fake_cv2):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 

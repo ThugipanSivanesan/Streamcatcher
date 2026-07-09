@@ -18,11 +18,14 @@ import os
 from dataclasses import dataclass
 
 from streamcatcher.config import Projection
+from streamcatcher.player.profiles import CameraProfile
 from streamcatcher.player.reprojection import (
     PITCH_STEP,
     YAW_STEP,
     ZOOM_STEP,
     EquirectView,
+    FisheyeView,
+    _SphericalView,
 )
 
 log = logging.getLogger("streamcatcher.player.session")
@@ -34,6 +37,22 @@ _FFMPEG_CAPTURE_OPTIONS = "rtsp_transport;tcp"
 
 class StreamOpenError(RuntimeError):
     """Raised when OpenCV cannot open the stream URL."""
+
+
+def _build_view(profile: CameraProfile) -> _SphericalView | None:
+    """Build the reprojection view for a profile, or ``None`` for flat video."""
+    offsets = {
+        "yaw_offset_deg": profile.yaw_offset_deg,
+        "pitch_offset_deg": profile.pitch_offset_deg,
+        "roll_offset_deg": profile.roll_offset_deg,
+    }
+    if profile.projection is Projection.EQUIRECT:
+        return EquirectView(**offsets)
+    if profile.projection is Projection.EQUIRECT_180:
+        return EquirectView(h_coverage_deg=180.0, v_coverage_deg=180.0, **offsets)
+    if profile.projection is Projection.FISHEYE:
+        return FisheyeView(fov_deg=profile.fisheye_fov_deg, **offsets)
+    return None  # Projection.FLAT — no reprojection
 
 
 def _load_cv2():
@@ -63,18 +82,32 @@ class ViewState:
 class StreamSession:
     """Own a live capture and an optional 360 viewport, with no window."""
 
-    def __init__(self, url: str, projection: Projection = Projection.FLAT) -> None:
+    def __init__(
+        self,
+        url: str,
+        projection: Projection = Projection.FLAT,
+        profile: CameraProfile | None = None,
+    ) -> None:
         self._url = url  # secret: embeds credentials, so it is never logged
-        self._projection = Projection(projection)
+        # A profile carries projection + mounting offsets; when none is given we
+        # synthesise a bare one from ``projection`` so the two entry points agree.
+        self._profile = profile or CameraProfile(
+            name=str(Projection(projection).value), projection=Projection(projection)
+        )
+        self._projection = self._profile.projection
         self._cap = None
         self._cv2 = None
-        self._view = EquirectView() if self._projection is Projection.EQUIRECT else None
+        self._view = _build_view(self._profile)
         self._maps = None  # cached (map_x, map_y); rebuilt when the view moves
 
     @property
-    def is_360(self) -> bool:
-        """Whether this session reprojects a 360 viewport."""
+    def has_viewport(self) -> bool:
+        """Whether this session reprojects a look-around viewport (any non-flat)."""
         return self._view is not None
+
+    # Back-compat alias: any reprojected viewport (equirect, equirect-180,
+    # fisheye) was originally called "360". Kept for existing callers/tests.
+    is_360 = has_viewport
 
     # -- lifecycle ------------------------------------------------------------
 

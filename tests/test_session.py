@@ -10,7 +10,14 @@ import logging
 import pytest
 
 from streamcatcher.config import Projection
-from streamcatcher.player.reprojection import PITCH_STEP, YAW_STEP, ZOOM_STEP
+from streamcatcher.player.profiles import get_profile
+from streamcatcher.player.reprojection import (
+    PITCH_STEP,
+    YAW_STEP,
+    ZOOM_STEP,
+    EquirectView,
+    FisheyeView,
+)
 from streamcatcher.player.session import StreamOpenError, StreamSession, ViewState
 
 
@@ -123,3 +130,51 @@ def test_session_does_not_log_the_url(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
         StreamSession("rtsp://user:secretpass@cam.local/stream").open()
     assert "secretpass" not in caplog.text
+
+
+# --- camera-profile-driven viewports ---------------------------------------
+
+
+def test_has_viewport_aliases_is_360():
+    flat = StreamSession("rtsp://cam/stream")
+    equi = StreamSession("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    assert flat.has_viewport is flat.is_360 is False
+    assert equi.has_viewport is equi.is_360 is True
+
+
+def test_profile_selects_projection_over_bare_arg():
+    # A profile carries its own projection and wins over the ``projection`` arg.
+    session = StreamSession(
+        "rtsp://cam/stream", projection=Projection.FLAT, profile=get_profile("generic-360")
+    )
+    assert session.has_viewport is True
+    assert isinstance(session._view, EquirectView)
+    assert session.state().projection == "equirect"
+
+
+def test_fisheye_profile_builds_a_fisheye_view():
+    session = StreamSession("rtsp://cam/stream", profile=get_profile("generic-fisheye"))
+    assert isinstance(session._view, FisheyeView)
+    assert session.state().projection == "fisheye"
+
+
+def test_equirect180_projection_builds_a_180_view():
+    session = StreamSession("rtsp://cam/stream", projection=Projection.EQUIRECT_180)
+    assert isinstance(session._view, EquirectView)
+    assert session._view.h_coverage_deg == 180.0
+
+
+def test_profile_offsets_reach_the_view():
+    from streamcatcher.player.profiles import CameraProfile
+
+    profile = CameraProfile("tilted", Projection.EQUIRECT, yaw_offset_deg=10.0, roll_offset_deg=5.0)
+    session = StreamSession("rtsp://cam/stream", profile=profile)
+    assert session._view.yaw_offset_deg == 10.0
+    assert session._view.roll_offset_deg == 5.0
+
+
+def test_fisheye_session_reprojects_frames(fake_cv2):
+    session = StreamSession("rtsp://cam/stream", profile=get_profile("generic-fisheye"))
+    session.open()
+    session.render(session.read_frame())
+    assert fake_cv2.remap_calls == 1
