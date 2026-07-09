@@ -6,7 +6,7 @@ import logging
 
 import typer
 
-from streamcatcher.config import Settings
+from streamcatcher.config import Backend, Settings
 from streamcatcher.logging_setup import install_secret_redaction
 from streamcatcher.player.factory import get_player
 
@@ -29,9 +29,21 @@ def play(
     url: str = typer.Argument(
         ..., metavar="URL", help="RTMP or RTSP stream URL (rtsp://… or rtmp://…)."
     ),
+    backend: Backend | None = typer.Option(
+        None,
+        "--backend",
+        "-b",
+        help="Playback backend: 'vlc' (live libVLC window) or 'stub' (offline). "
+        "Defaults to STREAMCATCHER_BACKEND, or the offline stub.",
+    ),
 ) -> None:
     """Connect to URL and play the stream."""
-    settings = Settings(stream_url=url)
+    # Pass ``backend`` only when given so the STREAMCATCHER_BACKEND env var still
+    # applies as the default; an explicit flag overrides it.
+    overrides: dict[str, object] = {"stream_url": url}
+    if backend is not None:
+        overrides["backend"] = backend
+    settings = Settings(**overrides)
     # Seed redaction with the raw URL so credentials can't leak anywhere in logs.
     install_secret_redaction(settings.secret_values())
 
