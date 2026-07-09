@@ -2,9 +2,10 @@ import logging
 
 import pytest
 
-from streamcatcher.config import Backend, Settings
+from streamcatcher.config import Backend, Projection, Settings
 from streamcatcher.player.base import Player
 from streamcatcher.player.factory import get_player
+from streamcatcher.player.reprojection import PITCH_STEP, YAW_STEP, ZOOM_STEP
 from streamcatcher.player.stub_player import StubPlayer
 
 # The ``fake_cv2`` fixture lives in tests/conftest.py.
@@ -132,3 +133,59 @@ def test_opencv_player_does_not_log_the_url(fake_cv2, caplog):
     with caplog.at_level(logging.INFO):
         OpenCvPlayer("rtsp://user:secretpass@cam.local/stream").play()
     assert "secretpass" not in caplog.text
+
+
+# --- 360 equirectangular viewport ------------------------------------------
+
+
+def test_factory_passes_projection_to_opencv_player():
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    settings = Settings(
+        stream_url="rtsp://cam/stream",
+        backend=Backend.OPENCV,
+        projection=Projection.EQUIRECT,
+    )
+    player = get_player(settings)
+    assert isinstance(player, OpenCvPlayer)
+    assert player._view is not None  # 360 viewport enabled
+
+
+def test_opencv_player_flat_does_not_reproject(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    OpenCvPlayer("rtsp://cam/stream").play()  # default projection = flat
+
+    assert fake_cv2.remap_calls == 0
+    assert fake_cv2.imshow_calls == fake_cv2.frames
+
+
+def test_opencv_player_360_reprojects_each_frame(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT).play()
+
+    assert fake_cv2.remap_calls == fake_cv2.frames  # every frame reprojected
+    assert fake_cv2.imshow_calls == fake_cv2.frames
+
+
+def test_opencv_player_360_pans_on_key(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.keys = [ord("d")]  # look right once, then no more keys
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    player.play()
+
+    assert player._view.yaw_deg == YAW_STEP  # the viewport panned right
+
+
+def test_opencv_player_360_tilts_and_zooms_on_keys(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    # One key per frame (default 3 frames): tilt up, tilt up, zoom in.
+    fake_cv2.keys = [ord("w"), ord("w"), ord("+")]
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    player.play()
+
+    assert player._view.pitch_deg == 2 * PITCH_STEP  # tilted up twice
+    assert player._view.hfov_deg == 100.0 - ZOOM_STEP  # zoomed in once

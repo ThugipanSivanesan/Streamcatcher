@@ -22,6 +22,13 @@ class Backend(StrEnum):
     OPENCV = "opencv"  # live OpenCV player (video only, owns its own window)
 
 
+class Projection(StrEnum):
+    """How the player interprets each frame's geometry."""
+
+    FLAT = "flat"  # ordinary rectilinear video — shown as-is
+    EQUIRECT = "equirect"  # 360 equirectangular panorama — reprojected to a viewport
+
+
 def strip_url_credentials(url: str) -> str:
     """Return ``url`` with any ``user:pass@`` userinfo removed (host/port kept)."""
     parts = urlsplit(url)
@@ -44,6 +51,7 @@ class Settings(BaseSettings):
 
     stream_url: SecretStr | None = None
     backend: Backend = Backend.STUB
+    projection: Projection = Projection.FLAT
 
     def secret_values(self) -> list[str]:
         """Plaintext credentials from the stream URL, to seed log redaction.
