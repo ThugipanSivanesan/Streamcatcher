@@ -8,8 +8,29 @@ plaintext only to seed the log-redaction filter (see ``logging_setup``).
 
 from __future__ import annotations
 
+from enum import StrEnum
+from urllib.parse import urlsplit, urlunsplit
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Backend(StrEnum):
+    """Playback backend that the player factory dispatches on."""
+
+    STUB = "stub"  # offline default: no window, deterministic, used by tests
+    VLC = "vlc"  # live libVLC player (wired in a later slice)
+
+
+def strip_url_credentials(url: str) -> str:
+    """Return ``url`` with any ``user:pass@`` userinfo removed (host/port kept)."""
+    parts = urlsplit(url)
+    if parts.username or parts.password:
+        host = parts.hostname or ""
+        if parts.port is not None:
+            host = f"{host}:{parts.port}"
+        parts = parts._replace(netloc=host)
+    return urlunsplit(parts)
 
 
 class Settings(BaseSettings):
@@ -22,12 +43,23 @@ class Settings(BaseSettings):
     )
 
     stream_url: SecretStr | None = None
+    backend: Backend = Backend.STUB
 
     def secret_values(self) -> list[str]:
-        """Plaintext secret values, used only to seed log redaction."""
-        values: list[str] = []
-        if self.stream_url is not None:
-            secret = self.stream_url.get_secret_value()
-            if secret:
-                values.append(secret)
-        return values
+        """Plaintext credentials from the stream URL, to seed log redaction.
+
+        Returns the embedded password and username (if any) — the sensitive
+        parts of an ``rtsp://user:pass@host`` URL — rather than the whole URL,
+        so the non-secret host can still be logged.
+        """
+        if self.stream_url is None:
+            return []
+        parts = urlsplit(self.stream_url.get_secret_value())
+        return [value for value in (parts.password, parts.username) if value]
+
+    @property
+    def display_url(self) -> str | None:
+        """The stream URL with credentials stripped — safe to log or print."""
+        if self.stream_url is None:
+            return None
+        return strip_url_credentials(self.stream_url.get_secret_value())
