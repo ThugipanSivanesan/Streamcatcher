@@ -27,6 +27,8 @@ class Projection(StrEnum):
 
     FLAT = "flat"  # ordinary rectilinear video — shown as-is
     EQUIRECT = "equirect"  # 360 equirectangular panorama — reprojected to a viewport
+    EQUIRECT_180 = "equirect-180"  # front-only 180x180 equirectangular hemisphere
+    FISHEYE = "fisheye"  # single raw fisheye lens — undistorted to a viewport
 
 
 def strip_url_credentials(url: str) -> str:
@@ -52,6 +54,7 @@ class Settings(BaseSettings):
     stream_url: SecretStr | None = None
     backend: Backend = Backend.STUB
     projection: Projection = Projection.FLAT
+    profile: str | None = None  # named camera preset; overrides ``projection`` when set
 
     def secret_values(self) -> list[str]:
         """Plaintext credentials from the stream URL, to seed log redaction.

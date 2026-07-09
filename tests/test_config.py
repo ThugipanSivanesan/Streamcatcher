@@ -30,6 +30,16 @@ def test_backend_defaults_to_stub():
     assert Settings().backend is Backend.STUB
 
 
+def test_profile_defaults_to_none(monkeypatch):
+    monkeypatch.delenv("STREAMCATCHER_PROFILE", raising=False)
+    assert Settings().profile is None
+
+
+def test_profile_loaded_from_env(monkeypatch):
+    monkeypatch.setenv("STREAMCATCHER_PROFILE", "ricoh-theta")
+    assert Settings().profile == "ricoh-theta"
+
+
 def test_display_url_strips_credentials():
     settings = Settings(stream_url="rtsp://user:pass@cam.local:554/stream1")
     assert settings.display_url == "rtsp://cam.local:554/stream1"

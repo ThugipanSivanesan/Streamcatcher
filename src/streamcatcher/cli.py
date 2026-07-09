@@ -40,19 +40,30 @@ def play(
         None,
         "--projection",
         "-p",
-        help="Frame geometry: 'equirect' reprojects a 360 equirectangular stream "
-        "to a look-around viewport (W/A/S/D to aim, +/- to zoom); 'flat' shows "
-        "frames as-is. Defaults to STREAMCATCHER_PROJECTION, or flat.",
+        help="Frame geometry: 'equirect'/'equirect-180' reproject a 360/hemisphere "
+        "panorama and 'fisheye' undistorts a raw lens, each to a look-around "
+        "viewport (W/A/S/D to aim, +/- to zoom); 'flat' shows frames as-is. "
+        "Defaults to STREAMCATCHER_PROJECTION, or flat.",
+    ),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Named camera preset (e.g. 'ricoh-theta', 'insta360-pro', "
+        "'generic-360', 'generic-180', 'generic-fisheye'). Sets the projection "
+        "and any mounting offsets, overriding --projection. Defaults to "
+        "STREAMCATCHER_PROFILE.",
     ),
 ) -> None:
     """Connect to URL and play the stream."""
-    # Pass ``backend``/``projection`` only when given so the STREAMCATCHER_* env
-    # vars still apply as defaults; an explicit flag overrides them.
+    # Pass flags only when given so the STREAMCATCHER_* env vars still apply as
+    # defaults; an explicit flag overrides them.
     overrides: dict[str, object] = {"stream_url": url}
     if backend is not None:
         overrides["backend"] = backend
     if projection is not None:
         overrides["projection"] = projection
+    if profile is not None:
+        overrides["profile"] = profile
     settings = Settings(**overrides)
     # Seed redaction with the raw URL so credentials can't leak anywhere in logs.
     install_secret_redaction(settings.secret_values())
