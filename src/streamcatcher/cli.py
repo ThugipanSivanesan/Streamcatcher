@@ -68,6 +68,14 @@ def play(
         "opening a window. Respects --projection/--profile. During live playback, "
         "press 'p' instead to save a timestamped snapshot.",
     ),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        metavar="DIR",
+        help="Directory for snapshots saved with the 'p' hotkey during live "
+        "playback (created if missing). Defaults to STREAMCATCHER_SNAPSHOT_DIR, "
+        "or the current directory.",
+    ),
 ) -> None:
     """Connect to URL and play the stream (or capture one frame with --snapshot)."""
     # Pass flags only when given so the STREAMCATCHER_* env vars still apply as
@@ -79,6 +87,8 @@ def play(
         overrides["projection"] = projection
     if profile is not None:
         overrides["profile"] = profile
+    if snapshot_dir is not None:
+        overrides["snapshot_dir"] = snapshot_dir
     if reconnect is not None:
         overrides["reconnect_enabled"] = reconnect
     settings = Settings(**overrides)

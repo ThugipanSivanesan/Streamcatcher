@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pytest
 
@@ -194,6 +195,19 @@ def test_opencv_player_save_snapshot_noop_before_any_frame(fake_cv2):
     assert fake_cv2.imwrite_calls == 0
 
 
+def test_opencv_player_p_key_writes_into_snapshot_dir(fake_cv2, tmp_path):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.keys = [ord("p")]  # snapshot on the first frame
+    OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY, snapshot_dir=str(tmp_path)).play()
+
+    assert fake_cv2.imwrite_calls == 1
+    saved_path = fake_cv2.written[0][0]
+    assert os.path.dirname(saved_path) == str(tmp_path)  # written into the chosen dir
+    assert os.path.basename(saved_path).startswith("streamcatcher-snapshot-")
+    assert saved_path.endswith(".jpg")
+
+
 def test_opencv_player_does_not_log_the_url(fake_cv2, caplog):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 
@@ -233,6 +247,19 @@ def test_factory_rejects_unknown_profile():
     settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.OPENCV, profile="bogus")
     with pytest.raises(ValueError):
         get_player(settings)
+
+
+def test_factory_passes_snapshot_dir_to_opencv_player():
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    settings = Settings(
+        stream_url="rtsp://cam/stream",
+        backend=Backend.OPENCV,
+        snapshot_dir="/tmp/shots",
+    )
+    player = get_player(settings)
+    assert isinstance(player, OpenCvPlayer)
+    assert player._snapshot_dir == "/tmp/shots"
 
 
 def test_opencv_player_flat_does_not_reproject(fake_cv2):

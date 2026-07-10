@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     backend: Backend = Backend.STUB
     projection: Projection = Projection.FLAT
     profile: str | None = None  # named camera preset; overrides ``projection`` when set
+    snapshot_dir: str | None = None  # where the 'p' hotkey saves snapshots; defaults to CWD
 
     # Auto-reconnect (live OpenCV backend). On a dropped stream the player
     # retries forever with exponential backoff until it returns or the user
