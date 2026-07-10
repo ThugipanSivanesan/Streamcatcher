@@ -18,7 +18,12 @@ from streamcatcher.player.reprojection import (
     EquirectView,
     FisheyeView,
 )
-from streamcatcher.player.session import StreamOpenError, StreamSession, ViewState
+from streamcatcher.player.session import (
+    SnapshotError,
+    StreamOpenError,
+    StreamSession,
+    ViewState,
+)
 
 
 def test_streamsession_is_exported_from_package():
@@ -217,3 +222,58 @@ def test_fisheye_session_reprojects_frames(fake_cv2):
     session.open()
     session.render(session.read_frame())
     assert fake_cv2.remap_calls == 1
+
+
+# --- snapshots --------------------------------------------------------------
+
+
+def test_snapshot_writes_current_frame(fake_cv2):
+    session = StreamSession("rtsp://cam/stream")  # flat
+    session.open()
+
+    session.snapshot("shot.jpg")
+
+    assert fake_cv2.imwrite_calls == 1
+    path, _frame = fake_cv2.written[0]
+    assert path == "shot.jpg"
+
+
+def test_snapshot_saves_the_reprojected_viewport_in_360(fake_cv2):
+    session = StreamSession("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    session.open()
+
+    session.snapshot("shot.jpg")
+
+    assert fake_cv2.remap_calls == 1  # the frame was reprojected before saving
+    assert fake_cv2.imwrite_calls == 1
+
+
+def test_snapshot_raises_when_no_frame_available(fake_cv2):
+    fake_cv2.frames = 0  # stream yields nothing
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+
+    with pytest.raises(SnapshotError):
+        session.snapshot("shot.jpg")
+    assert fake_cv2.imwrite_calls == 0
+
+
+def test_snapshot_raises_when_write_fails(fake_cv2):
+    fake_cv2.imwrite_ok = False  # OpenCV couldn't encode/write the file
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+
+    with pytest.raises(SnapshotError):
+        session.snapshot("shot.jpg")
+
+
+def test_write_snapshot_creates_parent_directory(fake_cv2, tmp_path):
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+    frame = session.read_frame()
+
+    target = tmp_path / "captures" / "shot.jpg"
+    session.write_snapshot(frame, str(target))
+
+    assert (tmp_path / "captures").is_dir()  # parent created for the caller
+    assert fake_cv2.written[0][0] == str(target)

@@ -52,8 +52,11 @@ class _FakeCv2:
         self.imshow_calls = 0
         self.remap_calls = 0
         self.imencode_calls = 0
+        self.imwrite_calls = 0
+        self.written: list[tuple[str, object]] = []  # (path, frame) per imwrite
         # Knobs the tests set to script behaviour.
         self.open_ok = True
+        self.imwrite_ok = True  # scripts imwrite's success return
         self.frames = 3
         self.keys: list[int] = []  # scripted waitKey return values
         self.window_visible = 1
@@ -92,6 +95,13 @@ class _FakeCv2:
         # callers get plausible bytes without a real encoder.
         self.imencode_calls += 1
         return True, np.frombuffer(b"\xff\xd8\xffFAKEJPEG", dtype=np.uint8)
+
+    def imwrite(self, path, frame, params=None) -> bool:  # noqa: N802 - mirrors the cv2 API
+        # Record the write instead of touching disk; ``imwrite_ok`` scripts the
+        # real API's bool return (False on encode/write failure).
+        self.imwrite_calls += 1
+        self.written.append((path, frame))
+        return self.imwrite_ok
 
     def waitKey(self, delay):  # noqa: N802
         if self._key_idx < len(self.keys):
