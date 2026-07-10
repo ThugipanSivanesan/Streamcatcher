@@ -6,9 +6,9 @@ which it reprojects into a flat pan/tilt/zoom "look-around" viewport. Pure Pytho
 powered by OpenCV.
 
 > **Status:** early development, built in small, tested vertical slices. Live
-> video playback, the 360°/fisheye look-around viewport, and named camera
-> profiles work today. Audio, snapshot capture, auto-reconnect, and an HTTP
-> control API are on the [roadmap](#roadmap).
+> video playback, the 360°/fisheye look-around viewport, named camera profiles,
+> snapshots, auto-reconnect, and an HTTP control API all work today. Audio is on
+> the [roadmap](#roadmap).
 
 ## Features
 
@@ -16,6 +16,10 @@ powered by OpenCV.
 - **360° / fisheye support:** reproject an equirectangular panorama, a 180°
   hemisphere, or a raw fisheye lens into a flat look-around viewport.
 - **Look around live:** `W`/`A`/`S`/`D` to pan and tilt, `+`/`-` to zoom, `q` to quit.
+- **Snapshots:** press `p` in the viewer to save the current view, or grab one
+  frame headlessly with `--snapshot out.jpg`.
+- **Auto-reconnect:** when a live stream drops, reconnect with exponential
+  backoff (retries forever by default; `--no-reconnect` to exit on the first drop).
 - **Camera profiles:** presets for Ricoh Theta, Insta360 Pro, and generic
   360/180/fisheye rigs set the projection and any mounting offsets for you.
 - **Offline-first:** the package and the entire test suite run with no network,
@@ -46,15 +50,22 @@ streamcatcher play rtsp://123.456.7.890/live/live -b opencv -p equirect
 
 # Use a named camera profile (sets projection + mounting offsets)
 streamcatcher play rtsp://cam/live -b opencv --profile ricoh-theta
+
+# Capture a single frame and exit — no window (respects -p/--profile)
+streamcatcher play rtsp://cam/live -b opencv --snapshot shot.jpg
 ```
 
-In the viewer window: **`W`/`A`/`S`/`D`** aim · **`+`/`-`** zoom · **`q`** quit.
+In the viewer window: **`W`/`A`/`S`/`D`** aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
+The `p` hotkey writes a timestamped `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg`
+in the current directory.
 
 | Flag | Values | Env var |
 |---|---|---|
 | `--backend` / `-b` | `opencv` (live window), `stub` (offline, default) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect`, `equirect-180`, `fisheye` | `STREAMCATCHER_PROJECTION` |
 | `--profile` | `flat`, `generic-360`, `generic-180`, `generic-fisheye`, `insta360-pro`, `ricoh-theta` | `STREAMCATCHER_PROFILE` |
+| `--snapshot` | `PATH` — save one frame there and exit | — |
+| `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 A profile overrides `--projection`. The default `stub` backend is a no-op used for
 offline development and tests; pass `-b opencv` to open a real window.

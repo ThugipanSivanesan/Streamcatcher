@@ -34,9 +34,18 @@ log = logging.getLogger("streamcatcher.player.session")
 # frames. Seeded into the env FFmpeg reads when OpenCV opens the capture.
 _FFMPEG_CAPTURE_OPTIONS = "rtsp_transport;tcp"
 
+# A just-opened stream's decoder can return a few empty reads before the first
+# real frame arrives, so a one-shot snapshot retries this many times before it
+# gives up.
+_SNAPSHOT_READ_ATTEMPTS = 30
+
 
 class StreamOpenError(RuntimeError):
     """Raised when OpenCV cannot open the stream URL."""
+
+
+class SnapshotError(RuntimeError):
+    """Raised when a snapshot frame can't be captured or written to disk."""
 
 
 def _build_view(profile: CameraProfile) -> _SphericalView | None:
@@ -222,3 +231,37 @@ class StreamSession:
             pitch_deg=self._view.pitch_deg,
             hfov_deg=self._view.hfov_deg,
         )
+
+    # -- snapshots ------------------------------------------------------------
+
+    def snapshot(self, path: str) -> None:
+        """Grab the current viewport and save it to ``path`` as an image file.
+
+        The saved image is the reprojected look-around viewport in 360 modes
+        (what the viewer sees), or the raw frame when flat. Reads until a frame
+        arrives — a just-opened decoder can return empty first — then writes it,
+        raising :class:`SnapshotError` if no frame comes or the file can't be
+        written.
+        """
+        frame = None
+        for _ in range(_SNAPSHOT_READ_ATTEMPTS):
+            frame = self.grab_view()
+            if frame is not None:
+                break
+        if frame is None:
+            raise SnapshotError("No frame to snapshot; the stream may have ended.")
+        self.write_snapshot(frame, path)
+
+    def write_snapshot(self, frame, path: str) -> None:
+        """Write an already-rendered ``frame`` to ``path`` as an image file.
+
+        Creates the parent directory if needed. Raises :class:`SnapshotError`
+        when OpenCV can't encode/write the file (e.g. an unknown extension or an
+        unwritable location).
+        """
+        cv2 = self._cv2 or _load_cv2()
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        if not cv2.imwrite(path, frame):
+            raise SnapshotError(f"Could not write the snapshot to {path!r}.")

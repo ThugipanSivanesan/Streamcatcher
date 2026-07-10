@@ -60,8 +60,16 @@ def play(
         "--no-reconnect to exit on the first drop. Defaults to "
         "STREAMCATCHER_RECONNECT_ENABLED.",
     ),
+    snapshot: str | None = typer.Option(
+        None,
+        "--snapshot",
+        metavar="PATH",
+        help="Capture a single frame to PATH (e.g. shot.jpg) and exit without "
+        "opening a window. Respects --projection/--profile. During live playback, "
+        "press 'p' instead to save a timestamped snapshot.",
+    ),
 ) -> None:
-    """Connect to URL and play the stream."""
+    """Connect to URL and play the stream (or capture one frame with --snapshot)."""
     # Pass flags only when given so the STREAMCATCHER_* env vars still apply as
     # defaults; an explicit flag overrides them.
     overrides: dict[str, object] = {"stream_url": url}
@@ -79,7 +87,10 @@ def play(
 
     log.info("Connecting to %s", settings.display_url)
     player = get_player(settings)
-    player.play()
+    if snapshot is not None:
+        player.snapshot(snapshot)
+    else:
+        player.play()
     log.info("Backend: %s", settings.backend.value)
 
 

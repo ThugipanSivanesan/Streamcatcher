@@ -126,11 +126,72 @@ def test_opencv_player_is_playing_reflects_capture(fake_cv2):
     assert player.is_playing() is False
 
 
-def test_opencv_player_snapshot_not_supported_yet():
+def test_opencv_player_snapshot_captures_one_frame(fake_cv2, tmp_path):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 
-    with pytest.raises(NotImplementedError):
-        OpenCvPlayer("rtsp://cam/stream").snapshot("shot.png")
+    player = OpenCvPlayer("rtsp://cam/stream")
+    path = str(tmp_path / "shot.jpg")
+    player.snapshot(path)
+
+    assert fake_cv2.imwrite_calls == 1
+    assert fake_cv2.written[0][0] == path
+    # It opened the stream just for the still and released it again.
+    assert fake_cv2.last_capture.release_calls == 1
+    assert player.is_playing() is False
+
+
+def test_opencv_player_snapshot_respects_projection(fake_cv2, tmp_path):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    player.snapshot(str(tmp_path / "shot.jpg"))
+
+    assert fake_cv2.remap_calls == 1  # the saved still is the reprojected viewport
+    assert fake_cv2.imwrite_calls == 1
+
+
+def test_opencv_player_snapshot_raises_when_stream_unopenable(fake_cv2, tmp_path):
+    from streamcatcher.player.opencv_player import OpenCvPlayer, StreamOpenError
+
+    fake_cv2.open_ok = False
+    with pytest.raises(StreamOpenError):
+        OpenCvPlayer("rtsp://cam/stream").snapshot(str(tmp_path / "shot.jpg"))
+    assert fake_cv2.imwrite_calls == 0
+
+
+def test_opencv_player_p_key_saves_a_timestamped_snapshot(fake_cv2, caplog):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.keys = [ord("p")]  # snapshot on the first frame
+    with caplog.at_level(logging.INFO):
+        OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY).play()
+
+    assert fake_cv2.imwrite_calls == 1
+    saved_path = fake_cv2.written[0][0]
+    assert saved_path.startswith("streamcatcher-snapshot-")
+    assert saved_path.endswith(".jpg")
+    assert "Snapshot saved to" in caplog.text
+
+
+def test_opencv_player_p_key_warns_and_keeps_playing_on_write_failure(fake_cv2, caplog):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.keys = [ord("p")]
+    fake_cv2.imwrite_ok = False  # the write fails
+    with caplog.at_level(logging.WARNING):
+        OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY).play()
+
+    assert "Snapshot failed" in caplog.text
+    assert fake_cv2.imshow_calls == fake_cv2.frames  # playback continued past the failure
+
+
+def test_opencv_player_save_snapshot_noop_before_any_frame(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream")
+    player._save_snapshot()  # nothing shown yet — must not touch disk
+
+    assert fake_cv2.imwrite_calls == 0
 
 
 def test_opencv_player_does_not_log_the_url(fake_cv2, caplog):

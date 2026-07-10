@@ -82,6 +82,19 @@ def test_play_unknown_profile_fails(fake_cv2):
     assert result.exit_code != 0
 
 
+def test_play_snapshot_flag_captures_one_frame_without_a_window(fake_cv2, tmp_path, caplog):
+    path = str(tmp_path / "shot.jpg")
+    with caplog.at_level(logging.INFO):
+        result = runner.invoke(
+            app, ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--snapshot", path]
+        )
+    assert result.exit_code == 0
+    assert fake_cv2.imwrite_calls == 1  # a still was written
+    assert fake_cv2.written[0][0] == path
+    assert fake_cv2.imshow_calls == 0  # no playback window was opened
+    assert "Snapshot saved to" in caplog.text
+
+
 def test_play_requires_a_url():
     result = runner.invoke(app, ["play"])
     assert result.exit_code != 0
