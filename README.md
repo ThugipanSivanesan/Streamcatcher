@@ -110,22 +110,31 @@ The server binds `127.0.0.1` by default. Set `--token` (or `STREAMCATCHER_API_TO
 to require an `Authorization: Bearer <token>` header on every request. Stream URLs
 and their credentials are never returned in any response.
 
+## Documentation
+
+Full docs — CLI usage, the 360°/camera guide, the Python and HTTP APIs,
+architecture, and an API reference generated from the source — are built with
+mkdocs-material under [`docs/`](docs/). Build them locally with
+`uv run mkdocs serve` (see [Contributing](CONTRIBUTING.md)).
+
 ## Roadmap
 
-- **Snapshots:** live `s` hotkey plus a one-shot `--snapshot out.png`.
-- **Auto-reconnect** with backoff when a stream drops.
+- **Audio.** OpenCV decodes video only; audio playback is not yet supported.
 
-## Development
+See the [changelog](CHANGELOG.md) for what has shipped so far.
 
-Requires [uv](https://docs.astral.sh/uv/).
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow. The short
+version, using [uv](https://docs.astral.sh/uv/):
 
 ```console
-uv sync                       # create the environment
+uv sync --extra api           # create the environment (incl. the API extra)
 uv run pytest                 # tests (offline, no credentials)
 uv run ruff check .           # lint
 uv run ruff format --check .  # format check
+uv run mkdocs serve           # preview the docs (needs: uv sync --group docs)
 pre-commit install            # enable local hooks
-pre-commit run --all-files    # run all hooks
 ```
 
 ## Security

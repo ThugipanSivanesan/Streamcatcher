@@ -22,3 +22,6 @@ snapshots/
 
 # Internal planning doc — keep out of the public repo
 docs/plan.html
+
+# mkdocs build output
+site/

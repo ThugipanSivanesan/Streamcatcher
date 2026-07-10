@@ -35,6 +35,12 @@ dev = [
     "pre-commit>=4.6.0",
     "httpx>=0.28",  # Starlette's TestClient transport, for the API tests
 ]
+# Documentation site (mkdocs-material + API reference from docstrings). Kept in
+# its own group so it isn't pulled into the default dev/test environment.
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
+]
 
 [build-system]
 requires = ["hatchling"]
