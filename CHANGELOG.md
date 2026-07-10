@@ -24,7 +24,9 @@ far is unreleased (no version has been tagged yet).
 - **HTTP control API** (optional `[api]` extra) — `streamcatcher serve` runs a
   localhost FastAPI server so another program or an AI agent can open sessions,
   drive the look-around, and pull JPEG/MJPEG frames. The stream URL is never echoed
-  back; optional bearer-token auth.
+  back; optional bearer-token auth. An optional per-session background reader
+  (`STREAMCATCHER_API_READER_ENABLED`) keeps the latest frame cached so requests
+  don't block on a read.
 - **Camera profiles** — named presets (`ricoh-theta`, `insta360-pro`,
   `generic-360/180/fisheye`, `flat`) that set the projection and mounting offsets.
 - **360°, 180°, and fisheye viewports** — pure-NumPy equirectangular→pinhole and

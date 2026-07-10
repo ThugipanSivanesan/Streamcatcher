@@ -50,6 +50,13 @@ def test_snapshot_dir_loaded_from_env(monkeypatch):
     assert Settings().snapshot_dir == "/tmp/shots"
 
 
+def test_api_reader_defaults_off(monkeypatch):
+    monkeypatch.delenv("STREAMCATCHER_API_READER_ENABLED", raising=False)
+    settings = Settings()
+    assert settings.api_reader_enabled is False
+    assert settings.api_reader_fps == 30
+
+
 def test_display_url_strips_credentials():
     settings = Settings(stream_url="rtsp://user:pass@cam.local:554/stream1")
     assert settings.display_url == "rtsp://cam.local:554/stream1"

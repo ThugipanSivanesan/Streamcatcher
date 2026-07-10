@@ -64,6 +64,7 @@ def create_app(settings: Settings | None = None):
     manager = SessionManager(
         max_sessions=settings.api_max_sessions,
         idle_timeout=settings.api_idle_timeout,
+        reader_fps=settings.api_reader_fps if settings.api_reader_enabled else 0,
     )
     token = settings.api_token.get_secret_value() if settings.api_token else None
     frame_interval = 1.0 / max(1, settings.api_stream_fps)

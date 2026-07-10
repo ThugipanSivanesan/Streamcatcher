@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     api_idle_timeout: int = 300  # seconds of inactivity before a session is reaped
     api_max_sessions: int = 8  # cap on concurrent sessions, to bound resource use
     api_stream_fps: int = 10  # frame rate cap for the MJPEG stream
+    # Optional per-session background reader: when enabled, a thread keeps the
+    # latest frame cached so requests don't block on cap.read(). Off by default,
+    # which keeps the on-demand read behaviour.
+    api_reader_enabled: bool = False
+    api_reader_fps: int = 30  # reader refresh-rate cap when enabled
 
     def secret_values(self) -> list[str]:
         """Plaintext credentials from the stream URL, to seed log redaction.
