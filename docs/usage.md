@@ -46,6 +46,7 @@ Closing the window also quits.
 | `--projection` / `-p` | `flat` (default), `equirect`, `equirect-180`, `fisheye` | `STREAMCATCHER_PROJECTION` |
 | `--profile` | `flat`, `generic-360`, `generic-180`, `generic-fisheye`, `insta360-pro`, `ricoh-theta` | `STREAMCATCHER_PROFILE` |
 | `--snapshot` | `PATH` — save one frame there and exit (no window) | — |
+| `--snapshot-dir` | `DIR` — where the `p` hotkey saves snapshots (created if missing; default: current directory) | `STREAMCATCHER_SNAPSHOT_DIR` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 Every flag has an environment-variable default (prefix `STREAMCATCHER_`); passing
@@ -78,7 +79,9 @@ Two ways to grab a still:
 
 - **Live:** press `p` in the viewer. The current view (the reprojected viewport in
   360 modes, the raw frame when flat) is written to a timestamped
-  `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg` in the current directory.
+  `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg` in the current directory — or in
+  the directory given by `--snapshot-dir` / `STREAMCATCHER_SNAPSHOT_DIR` (created
+  if it doesn't exist).
 - **One-shot:** `--snapshot PATH` opens the stream, grabs one rendered frame,
   writes it to `PATH`, and exits without ever opening a window. It respects
   `--projection` / `--profile`, so the still matches what the window would show.

@@ -40,6 +40,16 @@ def test_profile_loaded_from_env(monkeypatch):
     assert Settings().profile == "ricoh-theta"
 
 
+def test_snapshot_dir_defaults_to_none(monkeypatch):
+    monkeypatch.delenv("STREAMCATCHER_SNAPSHOT_DIR", raising=False)
+    assert Settings().snapshot_dir is None
+
+
+def test_snapshot_dir_loaded_from_env(monkeypatch):
+    monkeypatch.setenv("STREAMCATCHER_SNAPSHOT_DIR", "/tmp/shots")
+    assert Settings().snapshot_dir == "/tmp/shots"
+
+
 def test_display_url_strips_credentials():
     settings = Settings(stream_url="rtsp://user:pass@cam.local:554/stream1")
     assert settings.display_url == "rtsp://cam.local:554/stream1"

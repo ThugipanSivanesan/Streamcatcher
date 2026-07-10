@@ -57,7 +57,7 @@ streamcatcher play rtsp://cam/live -b opencv --snapshot shot.jpg
 
 In the viewer window: **`W`/`A`/`S`/`D`** aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
 The `p` hotkey writes a timestamped `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg`
-in the current directory.
+in the current directory (or in `--snapshot-dir` if set).
 
 | Flag | Values | Env var |
 |---|---|---|
@@ -65,6 +65,7 @@ in the current directory.
 | `--projection` / `-p` | `flat` (default), `equirect`, `equirect-180`, `fisheye` | `STREAMCATCHER_PROJECTION` |
 | `--profile` | `flat`, `generic-360`, `generic-180`, `generic-fisheye`, `insta360-pro`, `ricoh-theta` | `STREAMCATCHER_PROFILE` |
 | `--snapshot` | `PATH` — save one frame there and exit | — |
+| `--snapshot-dir` | `DIR` — directory for `p`-hotkey snapshots (default: current dir) | `STREAMCATCHER_SNAPSHOT_DIR` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 A profile overrides `--projection`. The default `stub` backend is a no-op used for

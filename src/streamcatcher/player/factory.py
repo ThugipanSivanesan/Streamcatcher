@@ -33,7 +33,13 @@ def get_player(settings: Settings) -> Player:
             factor=settings.reconnect_backoff_factor,
             max_delay=settings.reconnect_max_delay,
         )
-        return OpenCvPlayer(url, projection=settings.projection, profile=profile, reconnect=policy)
+        return OpenCvPlayer(
+            url,
+            projection=settings.projection,
+            profile=profile,
+            reconnect=policy,
+            snapshot_dir=settings.snapshot_dir,
+        )
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive
         f"Backend {settings.backend.value!r} is not supported."

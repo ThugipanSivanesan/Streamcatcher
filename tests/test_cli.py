@@ -1,4 +1,5 @@
 import logging
+import os
 
 from typer.testing import CliRunner
 
@@ -93,6 +94,27 @@ def test_play_snapshot_flag_captures_one_frame_without_a_window(fake_cv2, tmp_pa
     assert fake_cv2.written[0][0] == path
     assert fake_cv2.imshow_calls == 0  # no playback window was opened
     assert "Snapshot saved to" in caplog.text
+
+
+def test_play_snapshot_dir_flag_sets_hotkey_destination(fake_cv2, tmp_path):
+    fake_cv2.keys = [ord("p")]  # press 'p' during live playback
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--snapshot-dir",
+            str(tmp_path),
+            "--no-reconnect",
+        ],
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.imwrite_calls == 1
+    saved_path = fake_cv2.written[0][0]
+    assert os.path.dirname(saved_path) == str(tmp_path)  # hotkey snapshot landed in the flag dir
+    assert os.path.basename(saved_path).startswith("streamcatcher-snapshot-")
 
 
 def test_play_requires_a_url():
