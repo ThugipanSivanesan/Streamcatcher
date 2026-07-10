@@ -29,7 +29,7 @@ far is unreleased (no version has been tagged yet).
   `generic-360/180/fisheye`, `flat`) that set the projection and mounting offsets.
 - **360°, 180°, and fisheye viewports** — pure-NumPy equirectangular→pinhole and
   fisheye→pinhole reprojection into a flat, steerable look-around view
-  (`W/A/S/D` to aim, `+/-` to zoom).
+  (`W/A/S/D` or **mouse drag** to aim, `+/-` to zoom).
 - **Live OpenCV player** — view RTSP/RTMP streams in a native window from a plain
   Python CLI on macOS, Linux, and Windows (video only, no audio). RTSP is forced
   over TCP.

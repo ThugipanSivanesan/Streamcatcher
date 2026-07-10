@@ -55,7 +55,7 @@ streamcatcher play rtsp://cam/live -b opencv --profile ricoh-theta
 streamcatcher play rtsp://cam/live -b opencv --snapshot shot.jpg
 ```
 
-In the viewer window: **`W`/`A`/`S`/`D`** aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
+In the viewer window: **`W`/`A`/`S`/`D`** (or **drag the mouse**) aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
 The `p` hotkey writes a timestamped `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg`
 in the current directory (or in `--snapshot-dir` if set).
 

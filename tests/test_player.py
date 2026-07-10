@@ -303,6 +303,80 @@ def test_opencv_player_360_tilts_and_zooms_on_keys(fake_cv2):
     assert state.hfov_deg == 100.0 - ZOOM_STEP  # zoomed in once
 
 
+# --- 360 mouse-drag look-around --------------------------------------------
+
+
+def test_opencv_player_registers_a_mouse_callback(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY).play()
+
+    assert fake_cv2.mouse_callback is not None  # drag-to-look wired up
+
+
+def test_opencv_player_mouse_drag_right_pans_left_in_360(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY)
+    before = player._session.state().yaw_deg
+
+    # Press, then drag right (dx = +50). Grab-the-scene: the view looks left.
+    player._on_mouse(fake_cv2.EVENT_LBUTTONDOWN, 100, 100, 0, None)
+    player._on_mouse(fake_cv2.EVENT_MOUSEMOVE, 150, 100, fake_cv2.EVENT_FLAG_LBUTTON, None)
+
+    assert player._session.state().yaw_deg < before  # yaw decreased (looked left)
+
+
+def test_opencv_player_mouse_drag_down_tilts_up_in_360(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY)
+    before = player._session.state().pitch_deg
+
+    # Drag down (dy = +40). Grab-the-scene: the view looks up (pitch increases).
+    player._on_mouse(fake_cv2.EVENT_LBUTTONDOWN, 100, 100, 0, None)
+    player._on_mouse(fake_cv2.EVENT_MOUSEMOVE, 100, 140, fake_cv2.EVENT_FLAG_LBUTTON, None)
+
+    assert player._session.state().pitch_deg > before  # pitch increased (looked up)
+
+
+def test_opencv_player_mouse_move_without_button_does_not_look(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY)
+    before = player._session.state().yaw_deg
+
+    # Moving with no button held (and never pressed) must not move the view.
+    player._on_mouse(fake_cv2.EVENT_MOUSEMOVE, 150, 100, 0, None)
+
+    assert player._session.state().yaw_deg == before
+
+
+def test_opencv_player_mouse_release_stops_the_drag(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY)
+    player._on_mouse(fake_cv2.EVENT_LBUTTONDOWN, 100, 100, 0, None)
+    player._on_mouse(fake_cv2.EVENT_LBUTTONUP, 100, 100, 0, None)
+    yaw_after_release = player._session.state().yaw_deg
+
+    # Moving after the button is released must not keep looking around.
+    player._on_mouse(fake_cv2.EVENT_MOUSEMOVE, 200, 100, 0, None)
+
+    assert player._session.state().yaw_deg == yaw_after_release
+
+
+def test_opencv_player_mouse_drag_is_noop_when_flat(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY)  # flat: no viewport
+
+    player._on_mouse(fake_cv2.EVENT_LBUTTONDOWN, 100, 100, 0, None)
+    player._on_mouse(fake_cv2.EVENT_MOUSEMOVE, 150, 150, fake_cv2.EVENT_FLAG_LBUTTON, None)
+
+    assert player._session.state().yaw_deg is None  # flat has no orientation to change
+
+
 # --- auto-reconnect with backoff -------------------------------------------
 #
 # Reconnect retries forever, so a finite fake stream only stops on a quit

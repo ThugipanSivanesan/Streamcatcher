@@ -32,6 +32,7 @@ streamcatcher play rtsp://camera.local/live -b opencv --snapshot shot.jpg
 | Key | Action |
 |---|---|
 | `W` / `A` / `S` / `D` | Tilt up / pan left / tilt down / pan right *(360 modes only)* |
+| Mouse drag | Look around by dragging with the left button held *(360 modes only)* |
 | `+` / `-` | Zoom in / out *(360 modes only)* |
 | `p` | Save a snapshot |
 | `q` | Quit |
