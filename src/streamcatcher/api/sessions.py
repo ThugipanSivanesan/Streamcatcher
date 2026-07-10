@@ -7,10 +7,13 @@ per-session lock and a last-access timestamp.
 ``StreamSession`` is synchronous and not thread-safe (``look()`` mutates the
 viewport while ``render()`` reads it, and ``cap.read()`` blocks). Every access to
 a session therefore goes through its :class:`ManagedSession`, which serialises
-reads and look-mutations under one lock. Frames are read **on demand** — there is
-no always-on reader thread — and the API's route handlers run in Starlette's
-thread pool, so a blocking read never stalls the event loop. The only background
-task is the idle reaper (driven by the app), which calls :meth:`SessionManager.reap`.
+reads and look-mutations under one lock. By default frames are read **on demand**,
+and the API's route handlers run in Starlette's thread pool, so a blocking read
+never stalls the event loop. Optionally (``reader_fps > 0``) each session runs a
+background reader thread that keeps the latest frame cached, so request handlers
+return the cached frame instead of blocking on a read — see :class:`ManagedSession`.
+The other background task is the idle reaper (driven by the app), which calls
+:meth:`SessionManager.reap`.
 """
 
 from __future__ import annotations
@@ -41,26 +44,84 @@ class SessionLimitError(RuntimeError):
 
 
 class ManagedSession:
-    """A :class:`StreamSession` plus a lock and a last-access timestamp."""
+    """A :class:`StreamSession` plus a lock and a last-access timestamp.
 
-    def __init__(self, session_id: str, session: StreamSession) -> None:
+    When ``reader_fps`` is positive a background daemon thread owns the blocking
+    ``cap.read()`` and keeps the latest raw frame cached, so request handlers
+    return the cached frame instead of blocking on a read. The cache is primed
+    synchronously at construction; after the stream drops it holds the last good
+    frame (which *is* the latest frame) until reconnect or close. With
+    ``reader_fps == 0`` (the default) frames are read on demand under the lock,
+    exactly as before.
+    """
+
+    def __init__(self, session_id: str, session: StreamSession, *, reader_fps: int = 0) -> None:
         self.id = session_id
         self._session = session
-        self._lock = threading.Lock()
+        self._lock = threading.Lock()  # serialises access to the StreamSession
         self.last_access = time.monotonic()
+        # Optional background reader. ``_frame_lock`` guards only the cached-frame
+        # handoff and is never held while acquiring ``_lock`` (no lock-order cycle).
+        self._reader_fps = reader_fps
+        self._frame_lock = threading.Lock()
+        self._latest_raw = None  # most recent raw frame, or None if none yet
+        self._ended = False  # the stream has stopped producing frames
+        self._stop = threading.Event()
+        self._reader: threading.Thread | None = None
+        if reader_fps > 0:
+            self._read_once()  # prime so the first request already has a frame
+            if not self._ended:
+                self._reader = threading.Thread(
+                    target=self._reader_loop, name=f"reader-{session_id}", daemon=True
+                )
+                self._reader.start()
 
     def touch(self) -> None:
         self.last_access = time.monotonic()
 
-    # All of the following serialise access to the underlying session.
+    # --- background reader ----------------------------------------------------
+
+    def _read_once(self) -> bool:
+        """Read one raw frame into the cache; ``False`` once the stream has ended."""
+        with self._lock:
+            raw = self._session.read_frame()
+        if raw is None:
+            with self._frame_lock:
+                self._ended = True
+            return False
+        with self._frame_lock:
+            self._latest_raw = raw
+        return True
+
+    def _reader_loop(self) -> None:
+        """Refresh the cached frame until stopped or the stream ends."""
+        delay = 1.0 / self._reader_fps
+        while not self._stop.is_set():
+            if not self._read_once():
+                break  # stream ended — keep the last good frame and stop reading
+            self._stop.wait(delay)
+
+    def _cached_raw(self):
+        with self._frame_lock:
+            return self._latest_raw
+
+    # --- request-facing access (serialised) ----------------------------------
 
     def grab_view(self):
-        """Read and render the next viewport frame; ``None`` when the stream ends."""
+        """The current viewport frame (rendered); ``None`` when no frame is available."""
+        if self._reader_fps:
+            raw = self._cached_raw()
+            if raw is None:
+                return None
+            with self._lock:
+                return self._session.render(raw)
         with self._lock:
             return self._session.grab_view()
 
     def grab_raw(self):
-        """Read the next raw (pre-reprojection) frame; ``None`` when it ends."""
+        """The current raw (pre-reprojection) frame; ``None`` when unavailable."""
+        if self._reader_fps:
+            return self._cached_raw()
         with self._lock:
             return self._session.read_frame()
 
@@ -81,6 +142,9 @@ class ManagedSession:
             return self._session.state()
 
     def close(self) -> None:
+        self._stop.set()
+        if self._reader is not None:
+            self._reader.join(timeout=2.0)
         with self._lock:
             self._session.close()
 
@@ -88,11 +152,12 @@ class ManagedSession:
 class SessionManager:
     """A thread-safe registry of live sessions with a concurrency cap."""
 
-    def __init__(self, *, max_sessions: int, idle_timeout: int) -> None:
+    def __init__(self, *, max_sessions: int, idle_timeout: int, reader_fps: int = 0) -> None:
         self._sessions: dict[str, ManagedSession] = {}
         self._lock = threading.Lock()
         self._max_sessions = max_sessions
         self._idle_timeout = idle_timeout
+        self._reader_fps = reader_fps  # >0 gives each session a background reader
 
     def create(self, url: str, projection: Projection, profile_name: str | None) -> ManagedSession:
         """Open a new session for ``url`` and register it.
@@ -117,7 +182,7 @@ class SessionManager:
         session = StreamSession(url, projection=projection, profile=profile)
         session.open()  # raises StreamOpenError on failure
         session_id = uuid.uuid4().hex
-        managed = ManagedSession(session_id, session)
+        managed = ManagedSession(session_id, session, reader_fps=self._reader_fps)
         with self._lock:
             self._sessions[session_id] = managed
         log.info("Opened session %s.", session_id)

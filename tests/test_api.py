@@ -136,6 +136,78 @@ def test_mjpeg_stream_yields_frames(fake_cv2):
         assert b"\xff\xd8\xff" in resp.content
 
 
+# -- background reader (optional) ---------------------------------------------
+
+
+def test_reader_enabled_serves_frames_from_cache(fake_cv2):
+    from fastapi.testclient import TestClient
+
+    with TestClient(_create_app(fake_cv2, api_reader_enabled=True)) as client:
+        session_id = client.post("/session", json={"url": URL}).json()["id"]
+        # The cache is primed at creation and holds the last good frame, so both
+        # endpoints return a JPEG regardless of the reader thread's timing.
+        for path in (f"/session/{session_id}/frame", f"/session/{session_id}/panorama"):
+            resp = client.get(path)
+            assert resp.status_code == 200
+            assert resp.headers["content-type"] == "image/jpeg"
+            assert resp.content.startswith(b"\xff\xd8\xff")
+
+
+def test_reader_enabled_is_503_when_no_frame_ever_arrives(fake_cv2):
+    from fastapi.testclient import TestClient
+
+    # Stream opens but yields no frames: the primed read gets nothing, so the
+    # cache stays empty and the viewport request reports 503.
+    with TestClient(_create_app(fake_cv2, _frames=0, api_reader_enabled=True)) as client:
+        session_id = client.post("/session", json={"url": URL}).json()["id"]
+        assert client.get(f"/session/{session_id}/frame").status_code == 503
+
+
+def test_managed_session_reader_keeps_the_last_frame_after_the_stream_ends(fake_cv2):
+    from streamcatcher.api.sessions import ManagedSession
+    from streamcatcher.player.session import StreamSession
+
+    fake_cv2.frames = 2
+    session = StreamSession(URL)
+    session.open()
+    managed = ManagedSession("cache-test", session, reader_fps=1000)
+    # The reader thread self-terminates once the finite fake stream is exhausted.
+    assert managed._reader is not None
+    managed._reader.join(timeout=2.0)
+
+    assert managed._ended is True  # reached end of stream
+    assert managed.grab_raw() is not None  # but the last good frame is retained
+    managed.close()
+
+
+def test_managed_session_close_stops_the_reader_thread(fake_cv2):
+    from streamcatcher.api.sessions import ManagedSession
+    from streamcatcher.player.session import StreamSession
+
+    fake_cv2.frames = 1_000_000  # effectively endless, so the reader keeps running
+    session = StreamSession(URL)
+    session.open()
+    managed = ManagedSession("stop-test", session, reader_fps=1000)
+    assert managed._reader is not None and managed._reader.is_alive()
+
+    managed.close()
+
+    assert not managed._reader.is_alive()  # close() stopped and joined it
+
+
+def test_managed_session_on_demand_by_default_has_no_reader(fake_cv2):
+    from streamcatcher.api.sessions import ManagedSession
+    from streamcatcher.player.session import StreamSession
+
+    session = StreamSession(URL)
+    session.open()
+    managed = ManagedSession("default-test", session)  # reader_fps defaults to 0
+
+    assert managed._reader is None  # on-demand: no background thread
+    assert managed.grab_raw() is not None  # reads directly on request
+    managed.close()
+
+
 # -- look controls ------------------------------------------------------------
 
 

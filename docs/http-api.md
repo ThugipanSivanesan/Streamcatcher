@@ -55,6 +55,13 @@ Sessions are reaped after an idle timeout (default 300s) and capped in number
 (default 8); tune with `STREAMCATCHER_API_IDLE_TIMEOUT`,
 `STREAMCATCHER_API_MAX_SESSIONS`, and `STREAMCATCHER_API_STREAM_FPS`.
 
+By default each frame request reads on demand. Set
+`STREAMCATCHER_API_READER_ENABLED=true` to give every session a background reader
+thread that keeps the latest frame cached (refresh rate capped by
+`STREAMCATCHER_API_READER_FPS`, default 30), so `/frame` and `/panorama` return
+the cached frame instead of blocking on a read. After a drop the cache holds the
+last good frame until the stream returns.
+
 ## Walkthrough
 
 Open a session, aim the camera, and grab the view an agent would reason over:
@@ -111,6 +118,7 @@ With a token set, add `-H 'Authorization: Bearer changeme'` (or
 
 Route handlers are plain synchronous `def`, so Starlette runs them in its thread
 pool and a blocking `cap.read()` never stalls the event loop. Frames are read
-**on demand** under a per-session lock — there's no always-on reader thread — and a
-single background task reaps idle sessions. The server is a thin shell over the same
+**on demand** under a per-session lock by default; enabling the background reader
+(above) instead has a per-session thread keep the latest frame cached. A single
+background task reaps idle sessions. The server is a thin shell over the same
 headless [`StreamSession`](python-api.md) the GUI uses.
