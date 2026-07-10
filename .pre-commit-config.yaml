@@ -17,4 +17,8 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: check-yaml
+        # --unsafe: syntax-only check that tolerates custom tags. mkdocs.yml uses
+        # `!!python/name:` tags for Material's emoji extension, which the default
+        # (safe-load) check can't construct. mkdocs build --strict validates it fully.
+        args: [--unsafe]
       - id: check-toml
