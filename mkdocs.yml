@@ -1,0 +1,95 @@
+site_name: Streamcatcher
+site_description: >-
+  View RTMP/RTSP video streams — including 360° panoramic cameras — in a window,
+  or drive them headless from Python or an HTTP API.
+site_author: Thugipan Sivanesan
+repo_url: https://github.com/ThugipanSivanesan/Streamcatcher
+repo_name: ThugipanSivanesan/Streamcatcher
+copyright: Copyright &copy; Thugipan Sivanesan — MIT License
+# Rendered pages live under docs/; the built site goes to site/ (gitignored).
+docs_dir: docs
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    # Light/dark toggle — respects the reader's system preference first.
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - CLI usage: usage.md
+  - 360° & cameras: cameras.md
+  - Python API: python-api.md
+  - HTTP control API: http-api.md
+  - Architecture: architecture.md
+  - Security: security.md
+  - API reference: reference.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            separate_signature: true
+            merge_init_into_class: true
+            filters: ["!^_"]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      # Let docs/ pages include canonical files kept at the repo root
+      # (CHANGELOG.md, CONTRIBUTING.md) via the `--8<--` syntax.
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
