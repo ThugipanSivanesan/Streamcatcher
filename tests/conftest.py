@@ -44,6 +44,11 @@ class _FakeCv2:
     WINDOW_NORMAL = 0
     WND_PROP_VISIBLE = 1
     INTER_LINEAR = 1
+    # Mouse events/flags (real cv2 values) for the drag-to-look callback.
+    EVENT_MOUSEMOVE = 0
+    EVENT_LBUTTONDOWN = 1
+    EVENT_LBUTTONUP = 4
+    EVENT_FLAG_LBUTTON = 1
 
     def __init__(self) -> None:
         self.captures: list[_FakeCapture] = []
@@ -69,6 +74,9 @@ class _FakeCv2:
         self.open_results: list[bool] | None = None
         self.close_window_after_captures: int | None = None
         self._open_idx = 0
+        # The drag-to-look handler registered via setMouseCallback; tests invoke
+        # it directly to simulate mouse events.
+        self.mouse_callback = None
 
     def VideoCapture(self, url, api=None):  # noqa: N802 - mirrors the cv2 API name
         if self.open_results is not None and self._open_idx < len(self.open_results):
@@ -82,6 +90,9 @@ class _FakeCv2:
 
     def namedWindow(self, title, flags=0):  # noqa: N802
         self.named_windows.append(title)
+
+    def setMouseCallback(self, title, callback, param=None):  # noqa: N802 - cv2 API
+        self.mouse_callback = callback
 
     def imshow(self, title, frame) -> None:
         self.imshow_calls += 1

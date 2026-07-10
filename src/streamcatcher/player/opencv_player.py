@@ -43,6 +43,10 @@ _WAITKEY_MS = 1
 # look-around bindings, which reserve 's' for tilt-down.
 _SNAPSHOT_KEYS = (ord("p"), ord("P"))
 
+# Drag-to-look sensitivity, in degrees of view rotation per pixel dragged.
+# Applied to both axes; the reprojection wraps yaw and clamps pitch.
+_MOUSE_SENSITIVITY = 0.2
+
 
 class OpenCvPlayer:
     """Play a live RTMP/RTSP stream in an OpenCV window (video only).
@@ -66,16 +70,21 @@ class OpenCvPlayer:
         self._snapshot_dir = snapshot_dir  # 'p' hotkey destination; None = CWD
         self._window_open = False
         self._last_frame = None  # most recently rendered frame, for the 'p' snapshot
+        self._dragging = False  # left button held for drag-to-look (360 modes)
+        self._last_mouse = (0, 0)  # last cursor position while dragging
 
     def play(self) -> None:
         """Open the stream and show frames until the window closes or 'q' is hit."""
         cv2 = _load_cv2()
         self._session.open()
         if self._session.is_360:
-            log.info("360 viewport enabled. Look around: W/A/S/D, zoom: +/-, quit: q.")
+            log.info(
+                "360 viewport enabled. Look around: W/A/S/D or drag the mouse, zoom: +/-, quit: q."
+            )
         log.info("Press 'p' to save a snapshot.")
 
         cv2.namedWindow(_WINDOW_TITLE, cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback(_WINDOW_TITLE, self._on_mouse)
         self._window_open = True
         try:
             while True:
@@ -155,6 +164,30 @@ class OpenCvPlayer:
         action = actions.get(key)
         if action is not None:
             action()
+
+    def _on_mouse(self, event: int, x: int, y: int, flags: int, param=None) -> None:
+        """Drag with the left button held to look around (360 modes only).
+
+        Uses the grab-the-scene convention: dragging right looks left and
+        dragging down looks up, as if pulling the panorama under the cursor.
+        Pixel deltas are scaled to degrees by :data:`_MOUSE_SENSITIVITY` and
+        handed to the session, which wraps yaw and clamps pitch.
+        """
+        if not self._session.is_360:
+            return
+        cv2 = _load_cv2()
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self._dragging = True
+            self._last_mouse = (x, y)
+        elif event == cv2.EVENT_LBUTTONUP:
+            self._dragging = False
+        elif event == cv2.EVENT_MOUSEMOVE and self._dragging:
+            last_x, last_y = self._last_mouse
+            self._last_mouse = (x, y)
+            self._session.look(
+                pan=-(x - last_x) * _MOUSE_SENSITIVITY,
+                tilt=(y - last_y) * _MOUSE_SENSITIVITY,
+            )
 
     def stop(self) -> None:
         """Release the capture and destroy the window."""
