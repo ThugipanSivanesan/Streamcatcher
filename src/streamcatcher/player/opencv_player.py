@@ -19,7 +19,6 @@ import os
 import time
 
 from streamcatcher.config import Projection
-from streamcatcher.player.profiles import CameraProfile
 from streamcatcher.player.reconnect import ReconnectPolicy, backoff_delays
 from streamcatcher.player.session import (
     SnapshotError,
@@ -61,11 +60,10 @@ class OpenCvPlayer:
         self,
         url: str,
         projection: Projection = Projection.FLAT,
-        profile: CameraProfile | None = None,
         reconnect: ReconnectPolicy | None = None,
         snapshot_dir: str | None = None,
     ) -> None:
-        self._session = StreamSession(url, projection, profile)
+        self._session = StreamSession(url, projection)
         self._policy = reconnect or ReconnectPolicy()
         self._snapshot_dir = snapshot_dir  # 'p' hotkey destination; None = CWD
         self._window_open = False
@@ -215,7 +213,7 @@ class OpenCvPlayer:
         """Capture a single frame from the stream and save it to ``path`` (no window).
 
         Opens the stream if it isn't already, grabs one rendered frame — applying
-        the configured projection/profile, so the still matches what the window
+        the configured projection, so the still matches what the window
         shows — writes it, then leaves the capture as it found it. Raises
         :class:`StreamOpenError` if the stream won't open or
         :class:`SnapshotError` if no frame arrives or the file can't be written.

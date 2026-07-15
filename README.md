@@ -6,22 +6,20 @@ which it reprojects into a flat pan/tilt/zoom "look-around" viewport. Pure Pytho
 powered by OpenCV.
 
 > **Status:** early development, built in small, tested vertical slices. Live
-> video playback, the 360°/fisheye look-around viewport, named camera profiles,
-> snapshots, auto-reconnect, and an HTTP control API all work today. Video only —
-> OpenCV does not decode audio.
+> video playback, the 360° equirectangular look-around viewport, snapshots,
+> auto-reconnect, and an HTTP control API all work today. Video only — OpenCV
+> does not decode audio.
 
 ## Features
 
 - **View RTSP/RTMP streams** in a native window (OpenCV — video only, no audio).
-- **360° / fisheye support:** reproject an equirectangular panorama, a 180°
-  hemisphere, or a raw fisheye lens into a flat look-around viewport.
+- **360° support:** reproject an equirectangular panorama into a flat
+  look-around viewport.
 - **Look around live:** `W`/`A`/`S`/`D` to pan and tilt, `+`/`-` to zoom, `q` to quit.
 - **Snapshots:** press `p` in the viewer to save the current view, or grab one
   frame headlessly with `--snapshot out.jpg`.
 - **Auto-reconnect:** when a live stream drops, reconnect with exponential
   backoff (retries forever by default; `--no-reconnect` to exit on the first drop).
-- **Camera profiles:** presets for Ricoh Theta, Insta360 Pro, and generic
-  360/180/fisheye rigs set the projection and any mounting offsets for you.
 - **Offline-first:** the package and the entire test suite run with no network,
   no credentials, and no live stream. OpenCV is lazy-imported only on the live
   path, and an offline `stub` backend (`-b stub`) needs nothing at all.
@@ -48,10 +46,7 @@ streamcatcher play rtsp://camera.local:554/stream1
 # View a 360° equirectangular camera with a look-around viewport
 streamcatcher play rtsp://123.456.7.890/live/live -p equirect
 
-# Use a named camera profile (sets projection + mounting offsets)
-streamcatcher play rtsp://cam/live --profile ricoh-theta
-
-# Capture a single frame and exit — no window (respects -p/--profile)
+# Capture a single frame and exit — no window (respects -p)
 streamcatcher play rtsp://cam/live --snapshot shot.jpg
 ```
 
@@ -62,23 +57,22 @@ in the current directory (or in `--snapshot-dir` if set).
 | Flag | Values | Env var |
 |---|---|---|
 | `--backend` / `-b` | `opencv` (live window, default), `stub` (offline no-op) | `STREAMCATCHER_BACKEND` |
-| `--projection` / `-p` | `flat` (default), `equirect`, `equirect-180`, `fisheye` | `STREAMCATCHER_PROJECTION` |
-| `--profile` | `flat`, `generic-360`, `generic-180`, `generic-fisheye`, `insta360-pro`, `ricoh-theta` | `STREAMCATCHER_PROFILE` |
+| `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
 | `--snapshot` | `PATH` — save one frame there and exit | — |
 | `--snapshot-dir` | `DIR` — directory for `p`-hotkey snapshots (default: current dir) | `STREAMCATCHER_SNAPSHOT_DIR` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
-A profile overrides `--projection`. `play` opens a real OpenCV window by default;
-pass `-b stub` (or set `STREAMCATCHER_BACKEND=stub`) for the offline no-op backend
-used in development and tests.
+`play` opens a real OpenCV window by default; pass `-b stub` (or set
+`STREAMCATCHER_BACKEND=stub`) for the offline no-op backend used in development
+and tests.
 
 ## How it works
 
 - **Playback:** OpenCV (`cv2.VideoCapture` + highgui) opens its own native window
   from a plain Python CLI. RTSP is forced over TCP to reduce dropped packets.
-- **360° reprojection:** pure-NumPy equirectangular→pinhole and fisheye→pinhole
-  remap tables are fed to `cv2.remap`. The math is deterministic and unit-tested
-  with no GPU, window, or live stream needed.
+- **360° reprojection:** pure-NumPy equirectangular→pinhole remap tables are fed
+  to `cv2.remap`. The math is deterministic and unit-tested with no GPU, window,
+  or live stream needed.
 - **Headless control core:** `StreamSession` drives open / read / render /
   look-around / close with no window attached — the same core the HTTP control
   API sits on.

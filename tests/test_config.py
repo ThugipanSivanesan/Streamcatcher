@@ -30,16 +30,6 @@ def test_backend_defaults_to_stub():
     assert Settings().backend is Backend.STUB
 
 
-def test_profile_defaults_to_none(monkeypatch):
-    monkeypatch.delenv("STREAMCATCHER_PROFILE", raising=False)
-    assert Settings().profile is None
-
-
-def test_profile_loaded_from_env(monkeypatch):
-    monkeypatch.setenv("STREAMCATCHER_PROFILE", "ricoh-theta")
-    assert Settings().profile == "ricoh-theta"
-
-
 def test_snapshot_dir_defaults_to_none(monkeypatch):
     monkeypatch.delenv("STREAMCATCHER_SNAPSHOT_DIR", raising=False)
     assert Settings().snapshot_dir is None

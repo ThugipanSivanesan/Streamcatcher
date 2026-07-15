@@ -55,14 +55,6 @@ def test_create_equirect_exposes_viewport_state(client):
     assert body["hfov_deg"] is not None
 
 
-def test_unknown_profile_is_422_and_lists_valid_names(client):
-    resp = client.post("/session", json={"url": URL, "profile": "does-not-exist"})
-    assert resp.status_code == 422
-    assert "does-not-exist" in resp.text
-    assert "ricoh-theta" in resp.text  # the error lists valid profiles
-    assert URL not in resp.text
-
-
 def test_invalid_projection_is_422(client):
     resp = client.post("/session", json={"url": URL, "projection": "spherical"})
     assert resp.status_code == 422

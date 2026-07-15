@@ -5,14 +5,12 @@ network — so the geometry is pinned deterministically.
 """
 
 import numpy as np
-import pytest
 
 from streamcatcher.player.reprojection import (
     PITCH_STEP,
     YAW_STEP,
     ZOOM_STEP,
     EquirectView,
-    FisheyeView,
 )
 
 # Odd dimensions so an exact center pixel exists at index (H//2, W//2).
@@ -76,66 +74,6 @@ def test_zoom_clamps_field_of_view():
     for _ in range(100):
         view.zoom(ZOOM_STEP)
     assert view.hfov_deg == 120.0
-
-
-# --- equirect-180 (front-only hemisphere) ----------------------------------
-
-
-def test_equirect180_forward_still_samples_center():
-    view = EquirectView(out_width=101, out_height=101, h_coverage_deg=180.0)
-    x, y = _center(view)
-    assert x == np.float32(_SRC_W / 2)
-    assert y == np.float32(_SRC_H / 2)
-
-
-def test_equirect180_has_double_horizontal_sensitivity():
-    # A 180-wide frame packs the same panorama into half the longitude, so a
-    # 45 deg pan reaches the quarter-width that a full 360 needs 90 deg for.
-    view180 = EquirectView(out_width=101, out_height=101, h_coverage_deg=180.0, yaw_deg=45.0)
-    x180, _ = _center(view180)
-    x360, _ = _center(EquirectView(out_width=101, out_height=101, yaw_deg=45.0))
-    assert x180 == np.float32(0.75 * _SRC_W)
-    assert x360 == np.float32(0.625 * _SRC_W)  # (45/360)+0.5
-
-
-# --- fisheye (single equidistant lens) -------------------------------------
-
-# A square source keeps the fisheye circle radius equal on both axes.
-_FISH = 200
-
-
-def _fish_center(view):
-    map_x, map_y = view.build_maps(_FISH, _FISH)
-    r, c = view.out_height // 2, view.out_width // 2
-    return float(map_x[r, c]), float(map_y[r, c])
-
-
-def test_fisheye_forward_samples_image_center():
-    x, y = _fish_center(FisheyeView(out_width=101, out_height=101, fov_deg=180.0))
-    assert x == np.float32(_FISH / 2)
-    assert y == np.float32(_FISH / 2)
-
-
-def test_fisheye_90deg_pan_reaches_circle_edge():
-    # With a 180 deg lens, looking 90 deg sideways lands on the circle rim:
-    # the sampled column reaches the image edge, on the equator (mid row).
-    x, y = _fish_center(FisheyeView(out_width=101, out_height=101, fov_deg=180.0, yaw_deg=90.0))
-    assert x == pytest.approx(_FISH, abs=1e-3)  # right rim
-    assert y == pytest.approx(_FISH / 2, abs=1e-3)
-
-
-def test_fisheye_beyond_fov_is_masked_off_frame():
-    # Looking backwards is outside a 180 deg lens — those pixels map off-frame
-    # (negative) so cv2.remap renders them as the black border.
-    x, y = _fish_center(FisheyeView(out_width=101, out_height=101, fov_deg=180.0, yaw_deg=180.0))
-    assert x < 0
-    assert y < 0
-
-
-def test_fisheye_maps_are_float32_with_output_shape():
-    map_x, map_y = FisheyeView(out_width=64, out_height=48).build_maps(_FISH, _FISH)
-    assert map_x.shape == (48, 64)
-    assert map_x.dtype == np.float32 and map_y.dtype == np.float32
 
 
 # --- mounting orientation offsets ------------------------------------------

@@ -34,10 +34,10 @@ Two principles shape everything:
               open · read · render · look ·
               snapshot · reconnect · state
                           │
-             ┌────────────┼─────────────┐
-             ▼            ▼              ▼
-       reprojection   reconnect      profiles
-       (pure NumPy)   (backoff)     (camera presets)
+             ┌────────────┴─────────────┐
+             ▼                          ▼
+       reprojection               reconnect
+       (pure NumPy)               (backoff)
 ```
 
 ### `StreamSession` — the control core
@@ -62,8 +62,8 @@ lazy-loads `cv2` inside `play()`, importing the factory never needs OpenCV.
 ### Reprojection
 
 [`reprojection.py`][streamcatcher.player.reprojection] builds `cv2.remap` lookup
-tables with **pure NumPy** — equirectangular→pinhole and fisheye→pinhole — so the
-geometry is deterministic, GPU-free, and unit-testable without a live stream. See
+tables with **pure NumPy** — equirectangular→pinhole — so the geometry is
+deterministic, GPU-free, and unit-testable without a live stream. See
 [360° & cameras](cameras.md) for the math. Maps are cached and rebuilt only when
 the view moves.
 
@@ -74,13 +74,6 @@ the view moves.
 exposes `reconnect()`; the OpenCV backend wires the retry loop into its frame
 loop, staying responsive to `q` / window-close between waits. The viewport
 orientation survives a reconnect.
-
-### Camera profiles
-
-[`profiles.py`][streamcatcher.player.profiles] is a registry of frozen
-`CameraProfile` presets (projection + mounting offsets + fisheye FOV). A profile,
-when given, wins over the bare `--projection`; otherwise the session synthesises a
-bare profile from the projection so both entry points agree.
 
 ## Configuration
 

@@ -27,8 +27,6 @@ class Projection(StrEnum):
 
     FLAT = "flat"  # ordinary rectilinear video — shown as-is
     EQUIRECT = "equirect"  # 360 equirectangular panorama — reprojected to a viewport
-    EQUIRECT_180 = "equirect-180"  # front-only 180x180 equirectangular hemisphere
-    FISHEYE = "fisheye"  # single raw fisheye lens — undistorted to a viewport
 
 
 def strip_url_credentials(url: str) -> str:
@@ -54,7 +52,6 @@ class Settings(BaseSettings):
     stream_url: SecretStr | None = None
     backend: Backend = Backend.STUB
     projection: Projection = Projection.FLAT
-    profile: str | None = None  # named camera preset; overrides ``projection`` when set
     snapshot_dir: str | None = None  # where the 'p' hotkey saves snapshots; defaults to CWD
 
     # Auto-reconnect (live OpenCV backend). On a dropped stream the player
