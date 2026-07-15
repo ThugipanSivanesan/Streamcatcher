@@ -8,17 +8,42 @@ from streamcatcher.cli import app
 runner = CliRunner()
 
 
-def test_play_selects_stub_and_exits_cleanly(caplog):
+def test_play_backend_stub_exits_cleanly(caplog):
     with caplog.at_level(logging.INFO):
-        result = runner.invoke(app, ["play", "rtsp://cam.local:554/stream1"])
+        result = runner.invoke(app, ["play", "rtsp://cam.local:554/stream1", "-b", "stub"])
     assert result.exit_code == 0
     assert "cam.local" in caplog.text
     assert "stub" in caplog.text
 
 
+def test_play_defaults_to_opencv_without_flag_or_env(fake_cv2, caplog):
+    # No --backend flag and no STREAMCATCHER_BACKEND env var: `play` should pick
+    # the live opencv backend, not the offline stub.
+    with caplog.at_level(logging.INFO):
+        result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--no-reconnect"])
+    assert result.exit_code == 0
+    assert fake_cv2.last_capture is not None  # the live player opened the stream
+    assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"
+    assert "opencv" in caplog.text
+
+
+def test_play_backend_env_var_overrides_opencv_default(caplog):
+    # An explicit env var still wins over the play-command opencv default.
+    with caplog.at_level(logging.INFO):
+        result = runner.invoke(
+            app,
+            ["play", "rtsp://cam.local/stream1"],
+            env={"STREAMCATCHER_BACKEND": "stub"},
+        )
+    assert result.exit_code == 0
+    assert "stub" in caplog.text
+
+
 def test_play_does_not_leak_credentials(caplog):
     with caplog.at_level(logging.INFO):
-        result = runner.invoke(app, ["play", "rtsp://alice:hunter2@cam.local:554/stream1"])
+        result = runner.invoke(
+            app, ["play", "rtsp://alice:hunter2@cam.local:554/stream1", "-b", "stub"]
+        )
     assert result.exit_code == 0
     combined = caplog.text + result.output
     assert "hunter2" not in combined

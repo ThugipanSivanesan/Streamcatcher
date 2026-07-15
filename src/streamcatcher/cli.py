@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import typer
 
@@ -34,7 +35,7 @@ def play(
         "--backend",
         "-b",
         help="Playback backend: 'opencv' (live OpenCV window, video only) or "
-        "'stub' (offline). Defaults to STREAMCATCHER_BACKEND, or the offline stub.",
+        "'stub' (offline no-op). Defaults to STREAMCATCHER_BACKEND, or 'opencv'.",
     ),
     projection: Projection | None = typer.Option(
         None,
@@ -83,6 +84,11 @@ def play(
     overrides: dict[str, object] = {"stream_url": url}
     if backend is not None:
         overrides["backend"] = backend
+    elif not any(key.upper() == "STREAMCATCHER_BACKEND" for key in os.environ):
+        # No flag and no env var: a human running `play` wants live video, so
+        # default to opencv here. The Settings field stays STUB so tests, the
+        # library, and `serve` keep the offline-first default.
+        overrides["backend"] = Backend.OPENCV
     if projection is not None:
         overrides["projection"] = projection
     if profile is not None:

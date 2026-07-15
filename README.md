@@ -7,8 +7,8 @@ powered by OpenCV.
 
 > **Status:** early development, built in small, tested vertical slices. Live
 > video playback, the 360°/fisheye look-around viewport, named camera profiles,
-> snapshots, auto-reconnect, and an HTTP control API all work today. Audio is on
-> the [roadmap](#roadmap).
+> snapshots, auto-reconnect, and an HTTP control API all work today. Video only —
+> OpenCV does not decode audio.
 
 ## Features
 
@@ -23,8 +23,8 @@ powered by OpenCV.
 - **Camera profiles:** presets for Ricoh Theta, Insta360 Pro, and generic
   360/180/fisheye rigs set the projection and any mounting offsets for you.
 - **Offline-first:** the package and the entire test suite run with no network,
-  no credentials, and no live stream. The default `stub` backend needs nothing
-  installed; OpenCV is lazy-imported only on the live path.
+  no credentials, and no live stream. OpenCV is lazy-imported only on the live
+  path, and an offline `stub` backend (`-b stub`) needs nothing at all.
 - **Secrets-safe:** stream URLs (which may embed `user:pass@host`) are wrapped in
   `SecretStr` and scrubbed from logs by a redacting filter.
 
@@ -46,13 +46,13 @@ ffmpeg app, …) is required.
 streamcatcher play rtsp://camera.local:554/stream1
 
 # View a 360° equirectangular camera with a look-around viewport
-streamcatcher play rtsp://123.456.7.890/live/live -b opencv -p equirect
+streamcatcher play rtsp://123.456.7.890/live/live -p equirect
 
 # Use a named camera profile (sets projection + mounting offsets)
-streamcatcher play rtsp://cam/live -b opencv --profile ricoh-theta
+streamcatcher play rtsp://cam/live --profile ricoh-theta
 
 # Capture a single frame and exit — no window (respects -p/--profile)
-streamcatcher play rtsp://cam/live -b opencv --snapshot shot.jpg
+streamcatcher play rtsp://cam/live --snapshot shot.jpg
 ```
 
 In the viewer window: **`W`/`A`/`S`/`D`** (or **drag the mouse**) aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
@@ -61,15 +61,16 @@ in the current directory (or in `--snapshot-dir` if set).
 
 | Flag | Values | Env var |
 |---|---|---|
-| `--backend` / `-b` | `opencv` (live window), `stub` (offline, default) | `STREAMCATCHER_BACKEND` |
+| `--backend` / `-b` | `opencv` (live window, default), `stub` (offline no-op) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect`, `equirect-180`, `fisheye` | `STREAMCATCHER_PROJECTION` |
 | `--profile` | `flat`, `generic-360`, `generic-180`, `generic-fisheye`, `insta360-pro`, `ricoh-theta` | `STREAMCATCHER_PROFILE` |
 | `--snapshot` | `PATH` — save one frame there and exit | — |
 | `--snapshot-dir` | `DIR` — directory for `p`-hotkey snapshots (default: current dir) | `STREAMCATCHER_SNAPSHOT_DIR` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
-A profile overrides `--projection`. The default `stub` backend is a no-op used for
-offline development and tests; pass `-b opencv` to open a real window.
+A profile overrides `--projection`. `play` opens a real OpenCV window by default;
+pass `-b stub` (or set `STREAMCATCHER_BACKEND=stub`) for the offline no-op backend
+used in development and tests.
 
 ## How it works
 
@@ -79,8 +80,8 @@ offline development and tests; pass `-b opencv` to open a real window.
   remap tables are fed to `cv2.remap`. The math is deterministic and unit-tested
   with no GPU, window, or live stream needed.
 - **Headless control core:** `StreamSession` drives open / read / render /
-  look-around / close with no window attached — the same core the planned HTTP
-  API will sit on.
+  look-around / close with no window attached — the same core the HTTP control
+  API sits on.
 - **CLI:** [Typer](https://typer.tiangolo.com/).
 
 ## HTTP control API
@@ -116,13 +117,8 @@ and their credentials are never returned in any response.
 Full docs — CLI usage, the 360°/camera guide, the Python and HTTP APIs,
 architecture, and an API reference generated from the source — are built with
 mkdocs-material under [`docs/`](docs/). Build them locally with
-`uv run mkdocs serve` (see [Contributing](CONTRIBUTING.md)).
-
-## Roadmap
-
-- **Audio.** OpenCV decodes video only; audio playback is not yet supported.
-
-See the [changelog](CHANGELOG.md) for what has shipped so far.
+`uv run mkdocs serve` (see [Contributing](CONTRIBUTING.md)). See the
+[changelog](CHANGELOG.md) for what has shipped so far.
 
 ## Contributing
 
