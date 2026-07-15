@@ -20,9 +20,15 @@ class _FakeCapture:
         self._frames_left = frames
         self._opened = opened
         self.release_calls = 0
+        self.buffersize = None  # records cap.set(CAP_PROP_BUFFERSIZE, ...)
 
     def isOpened(self) -> bool:  # noqa: N802 - mirrors the cv2 API name
         return self._opened
+
+    def set(self, prop, value) -> bool:
+        if prop == _FakeCv2.CAP_PROP_BUFFERSIZE:
+            self.buffersize = value
+        return True
 
     def read(self):
         if self._frames_left > 0:
@@ -41,6 +47,7 @@ class _FakeCv2:
 
     # Constants the player reads off the module.
     CAP_FFMPEG = 1900
+    CAP_PROP_BUFFERSIZE = 38
     WINDOW_NORMAL = 0
     WND_PROP_VISIBLE = 1
     INTER_LINEAR = 1

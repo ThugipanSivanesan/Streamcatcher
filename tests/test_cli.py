@@ -78,7 +78,7 @@ def test_play_projection_equirect_enables_360_viewport(fake_cv2, caplog):
             ],
         )
     assert result.exit_code == 0
-    assert fake_cv2.remap_calls == fake_cv2.frames  # frames were reprojected
+    assert fake_cv2.remap_calls >= 1  # frames were reprojected (stale ones dropped)
     assert "360 viewport" in caplog.text
 
 

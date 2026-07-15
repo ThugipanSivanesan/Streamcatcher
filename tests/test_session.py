@@ -47,6 +47,13 @@ def test_open_read_and_close_lifecycle(fake_cv2):
     assert fake_cv2.last_capture.release_calls == 1
 
 
+def test_open_requests_a_minimal_frame_buffer(fake_cv2):
+    # Low-latency: the capture is told to keep only the freshest frame buffered.
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+    assert fake_cv2.last_capture.buffersize == 1
+
+
 def test_close_is_idempotent(fake_cv2):
     session = StreamSession("rtsp://cam/stream")
     session.open()
