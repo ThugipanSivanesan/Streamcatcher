@@ -15,7 +15,6 @@ importing this module never requires OpenCV; tests inject a fake ``cv2``.
 from __future__ import annotations
 
 import logging
-import os
 import time
 
 from streamcatcher.config import Projection
@@ -62,11 +61,9 @@ class OpenCvPlayer:
         url: str,
         projection: Projection = Projection.FLAT,
         reconnect: ReconnectPolicy | None = None,
-        snapshot_dir: str | None = None,
     ) -> None:
         self._session = StreamSession(url, projection)
         self._policy = reconnect or ReconnectPolicy()
-        self._snapshot_dir = snapshot_dir  # 'p' hotkey destination; None = CWD
         self._window_open = False
         self._last_frame = None  # most recently rendered frame, for the 'p' snapshot
         self._last_raw = None  # raw frame behind _last_frame, to skip re-rendering it
@@ -218,14 +215,12 @@ class OpenCvPlayer:
         if self._last_frame is None:
             return  # nothing shown yet
         filename = f"streamcatcher-snapshot-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
-        # ``write_snapshot`` creates the directory if needed; None keeps CWD.
-        path = os.path.join(self._snapshot_dir, filename) if self._snapshot_dir else filename
         try:
-            self._session.write_snapshot(self._last_frame, path)
+            self._session.write_snapshot(self._last_frame, filename)
         except SnapshotError as exc:
             log.warning("Snapshot failed: %s", exc)
             return
-        log.info("Snapshot saved to %s", path)
+        log.info("Snapshot saved to %s", filename)
 
     def snapshot(self, path: str) -> None:
         """Capture a single frame from the stream and save it to ``path`` (no window).

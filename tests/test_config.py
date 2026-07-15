@@ -30,16 +30,6 @@ def test_backend_defaults_to_stub():
     assert Settings().backend is Backend.STUB
 
 
-def test_snapshot_dir_defaults_to_none(monkeypatch):
-    monkeypatch.delenv("STREAMCATCHER_SNAPSHOT_DIR", raising=False)
-    assert Settings().snapshot_dir is None
-
-
-def test_snapshot_dir_loaded_from_env(monkeypatch):
-    monkeypatch.setenv("STREAMCATCHER_SNAPSHOT_DIR", "/tmp/shots")
-    assert Settings().snapshot_dir == "/tmp/shots"
-
-
 def test_api_reader_defaults_off(monkeypatch):
     monkeypatch.delenv("STREAMCATCHER_API_READER_ENABLED", raising=False)
     settings = Settings()

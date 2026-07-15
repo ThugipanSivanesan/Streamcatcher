@@ -33,7 +33,6 @@ def get_player(settings: Settings) -> Player:
             url,
             projection=settings.projection,
             reconnect=policy,
-            snapshot_dir=settings.snapshot_dir,
         )
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive

@@ -1,11 +1,24 @@
 import logging
-import os
+import re
+from pathlib import Path
 
 from typer.testing import CliRunner
 
 from streamcatcher.cli import app
 
 runner = CliRunner()
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI colour codes so rich splits option names back into substrings.
+
+    Typer's rich help/error output colours each option name, breaking e.g.
+    ``--snapshot`` into separate escape spans, so a literal ``"--snapshot" in
+    output`` check fails on the raw string. Strip the codes first.
+    """
+    return _ANSI.sub("", text)
 
 
 def test_play_backend_stub_exits_cleanly(caplog):
@@ -24,6 +37,7 @@ def test_play_defaults_to_opencv_without_flag_or_env(fake_cv2, caplog):
     assert result.exit_code == 0
     assert fake_cv2.last_capture is not None  # the live player opened the stream
     assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"
+    assert fake_cv2.imwrite_calls == 0  # no snapshot unless --snapshot is passed
     assert "opencv" in caplog.text
 
 
@@ -83,20 +97,22 @@ def test_play_projection_equirect_enables_360_viewport(fake_cv2, caplog):
 
 
 def test_play_snapshot_flag_captures_one_frame_without_a_window(fake_cv2, tmp_path, caplog):
-    path = str(tmp_path / "shot.jpg")
+    target = tmp_path / "captures" / "shot.jpg"
     with caplog.at_level(logging.INFO):
         result = runner.invoke(
-            app, ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--snapshot", path]
+            app,
+            ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--snapshot", str(target)],
         )
     assert result.exit_code == 0
     assert fake_cv2.imwrite_calls == 1  # a still was written
-    assert fake_cv2.written[0][0] == path
+    assert fake_cv2.written[0][0] == str(target)
+    assert target.parent.is_dir()
     assert fake_cv2.imshow_calls == 0  # no playback window was opened
     assert "Snapshot saved to" in caplog.text
 
 
-def test_play_snapshot_dir_flag_sets_hotkey_destination(fake_cv2, tmp_path):
-    fake_cv2.keys = [ord("p")]  # press 'p' during live playback
+def test_play_snapshot_accepts_equals_path(fake_cv2, tmp_path):
+    target = tmp_path / "shot.jpg"
     result = runner.invoke(
         app,
         [
@@ -104,16 +120,57 @@ def test_play_snapshot_dir_flag_sets_hotkey_destination(fake_cv2, tmp_path):
             "rtsp://cam.local/stream1",
             "-b",
             "opencv",
-            "--snapshot-dir",
-            str(tmp_path),
+            f"--snapshot={target}",
+        ],
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.written[0][0] == str(target)
+
+
+def test_play_snapshot_without_path_defaults_to_current_directory(fake_cv2, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--snapshot",
             "--no-reconnect",
         ],
     )
     assert result.exit_code == 0
     assert fake_cv2.imwrite_calls == 1
-    saved_path = fake_cv2.written[0][0]
-    assert os.path.dirname(saved_path) == str(tmp_path)  # hotkey snapshot landed in the flag dir
-    assert os.path.basename(saved_path).startswith("streamcatcher-snapshot-")
+    saved_path = Path(fake_cv2.written[0][0])
+    assert saved_path.resolve().parent == tmp_path.resolve()
+    assert saved_path.name.startswith("streamcatcher-snapshot-")
+    assert saved_path.suffix == ".jpg"
+    assert fake_cv2.imshow_calls == 0
+
+
+def test_play_rejects_removed_snapshot_dir_option(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "--snapshot-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 2
+    output = _plain(result.output)
+    assert "No such option" in output
+    assert "--snapshot-dir" in output
+
+
+def test_play_help_only_lists_snapshot_option():
+    result = runner.invoke(app, ["play", "--help"])
+    assert result.exit_code == 0
+    output = _plain(result.output)
+    assert "--snapshot" in output
+    assert "--snapshot-dir" not in output
 
 
 def test_play_requires_a_url():

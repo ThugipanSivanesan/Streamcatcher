@@ -17,6 +17,7 @@ dist/
 build/
 *.egg-info/
 snapshots/
+streamcatcher-snapshot-*.jpg
 *.png
 !docs/**/*.png
 
@@ -25,3 +26,6 @@ docs/plan.html
 
 # mkdocs build output
 site/
+
+# Local AI notes (not for upload)
+CODEBASE_NOTES.md
