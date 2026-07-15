@@ -28,9 +28,14 @@ from streamcatcher.player.reprojection import (
 
 log = logging.getLogger("streamcatcher.player.session")
 
-# Force RTSP over TCP: the default UDP transport drops/truncates high-resolution
-# frames. Seeded into the env FFmpeg reads when OpenCV opens the capture.
-_FFMPEG_CAPTURE_OPTIONS = "rtsp_transport;tcp"
+# Low-latency FFmpeg capture options, seeded into the env FFmpeg reads when
+# OpenCV opens the capture (pairs are ``key;value`` delimited by ``|``):
+#   rtsp_transport;tcp  force RTSP over TCP — the default UDP transport
+#                       drops/truncates high-resolution frames.
+#   fflags;nobuffer     skip the demuxer's input buffer, so a frame reaches us
+#                       as soon as it is demuxed instead of queuing — this keeps
+#                       a live view close to real time.
+_FFMPEG_CAPTURE_OPTIONS = "rtsp_transport;tcp|fflags;nobuffer"
 
 # A just-opened stream's decoder can return a few empty reads before the first
 # real frame arrives, so a one-shot snapshot retries this many times before it
@@ -104,7 +109,7 @@ class StreamSession:
     # -- lifecycle ------------------------------------------------------------
 
     def open(self) -> None:
-        """Open the stream capture, forcing RTSP-over-TCP. Raises on failure."""
+        """Open the stream capture with low-latency options. Raises on failure."""
         cv2 = _load_cv2()
         os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", _FFMPEG_CAPTURE_OPTIONS)
         log.info("Opening live stream with OpenCV.")
@@ -114,6 +119,10 @@ class StreamSession:
             raise StreamOpenError(
                 "Could not open the stream. Check the URL, network, and credentials."
             )
+        # Keep only the freshest frame buffered so a slow render loop can't fall
+        # progressively behind real time. Best-effort: honored by some backends,
+        # ignored by others (FFmpeg leans on ``fflags;nobuffer`` above instead).
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self._cv2 = cv2
         self._cap = cap
 

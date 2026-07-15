@@ -82,7 +82,8 @@ def test_opencv_player_play_opens_stream_and_shows_frames(fake_cv2):
     cap = fake_cv2.last_capture
     assert cap is not None
     assert cap.url == "rtsp://user:pass@cam/stream"
-    assert fake_cv2.imshow_calls == fake_cv2.frames  # every frame was shown
+    # The reader drops stale frames, so we show the freshest one(s), not each one.
+    assert fake_cv2.imshow_calls >= 1  # at least one frame was shown
     assert cap.release_calls == 1  # capture released on the way out
     assert fake_cv2.destroyed_windows == ["Streamcatcher"]  # window torn down
 
@@ -183,7 +184,7 @@ def test_opencv_player_p_key_warns_and_keeps_playing_on_write_failure(fake_cv2, 
         OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY).play()
 
     assert "Snapshot failed" in caplog.text
-    assert fake_cv2.imshow_calls == fake_cv2.frames  # playback continued past the failure
+    assert fake_cv2.imshow_calls >= 1  # playback continued past the failure
 
 
 def test_opencv_player_save_snapshot_noop_before_any_frame(fake_cv2):
@@ -251,16 +252,18 @@ def test_opencv_player_flat_does_not_reproject(fake_cv2):
     OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY).play()  # default projection = flat
 
     assert fake_cv2.remap_calls == 0
-    assert fake_cv2.imshow_calls == fake_cv2.frames
+    assert fake_cv2.imshow_calls >= 1
 
 
-def test_opencv_player_360_reprojects_each_frame(fake_cv2):
+def test_opencv_player_360_reprojects_frames(fake_cv2):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 
     OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY).play()
 
-    assert fake_cv2.remap_calls == fake_cv2.frames  # every frame reprojected
-    assert fake_cv2.imshow_calls == fake_cv2.frames
+    # The reader drops stale frames, so the viewport is reprojected for whichever
+    # frame is freshest each tick rather than for every frame the stream produced.
+    assert fake_cv2.remap_calls >= 1  # frames were reprojected
+    assert fake_cv2.imshow_calls >= 1
 
 
 def test_opencv_player_360_pans_on_key(fake_cv2):
@@ -276,10 +279,14 @@ def test_opencv_player_360_pans_on_key(fake_cv2):
 def test_opencv_player_360_tilts_and_zooms_on_keys(fake_cv2):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 
-    # One key per frame (default 3 frames): tilt up, tilt up, zoom in.
-    fake_cv2.keys = [ord("w"), ord("w"), ord("+")]
-    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT, reconnect=_NO_RETRY)
-    player.play()
+    # Key routing is dispatched directly: the play loop reads frames on a
+    # background thread now, so driving multiple keystrokes through it would race
+    # the stream's end. ``test_opencv_player_360_pans_on_key`` covers the loop's
+    # dispatch path; this pins the tilt/zoom mapping deterministically.
+    player = OpenCvPlayer("rtsp://cam/stream", projection=Projection.EQUIRECT)
+    player._dispatch_key(ord("w"))  # tilt up
+    player._dispatch_key(ord("w"))  # tilt up
+    player._dispatch_key(ord("+"))  # zoom in
 
     state = player._session.state()
     assert state.pitch_deg == 2 * PITCH_STEP  # tilted up twice

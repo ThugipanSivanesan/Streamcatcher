@@ -19,6 +19,7 @@ import os
 import time
 
 from streamcatcher.config import Projection
+from streamcatcher.player.reader import FrameReader
 from streamcatcher.player.reconnect import ReconnectPolicy, backoff_delays
 from streamcatcher.player.session import (
     SnapshotError,
@@ -68,6 +69,8 @@ class OpenCvPlayer:
         self._snapshot_dir = snapshot_dir  # 'p' hotkey destination; None = CWD
         self._window_open = False
         self._last_frame = None  # most recently rendered frame, for the 'p' snapshot
+        self._last_raw = None  # raw frame behind _last_frame, to skip re-rendering it
+        self._view_dirty = False  # the viewport moved — re-render even on the same frame
         self._dragging = False  # left button held for drag-to-look (360 modes)
         self._last_mouse = (0, 0)  # last cursor position while dragging
 
@@ -84,27 +87,40 @@ class OpenCvPlayer:
         cv2.namedWindow(_WINDOW_TITLE, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(_WINDOW_TITLE, self._on_mouse)
         self._window_open = True
+        # A background thread owns the blocking reads so decode jitter can't
+        # freeze the window or the look-around keys; the loop below renders the
+        # freshest frame at its own cadence and stays responsive to input.
+        reader = FrameReader(self._session)
+        reader.start()
         try:
             while True:
-                frame = self._session.read_frame()
-                if frame is None:
-                    if not self._policy.enabled:
-                        log.info("Stream ended or dropped.")
-                        break
-                    if not self._reconnect(cv2):
-                        break  # the user quit while we were reconnecting
-                    continue  # reconnected — resume reading frames
-                self._last_frame = self._session.render(frame)
-                cv2.imshow(_WINDOW_TITLE, self._last_frame)
+                raw = reader.latest()
+                # Re-render only when there's a new frame or the viewport moved,
+                # so an idle view doesn't re-run the (costly) 360 remap each tick.
+                if raw is not None and (raw is not self._last_raw or self._view_dirty):
+                    self._last_frame = self._session.render(raw)
+                    cv2.imshow(_WINDOW_TITLE, self._last_frame)
+                    self._last_raw = raw
+                    self._view_dirty = False
                 key = cv2.waitKey(_WAITKEY_MS) & 0xFF
                 if key == ord("q"):
                     break
                 self._dispatch_key(key)
                 if cv2.getWindowProperty(_WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
                     break  # the user closed the window
+                if reader.ended():
+                    reader.stop()
+                    if not self._policy.enabled:
+                        log.info("Stream ended or dropped.")
+                        break
+                    if not self._reconnect(cv2):
+                        break  # the user quit while we were reconnecting
+                    reader = FrameReader(self._session)  # fresh capture, fresh reader
+                    reader.start()
         except KeyboardInterrupt:
             log.info("Interrupted — closing the stream.")
         finally:
+            reader.stop()
             self.stop()
 
     def _reconnect(self, cv2) -> bool:
@@ -162,6 +178,7 @@ class OpenCvPlayer:
         action = actions.get(key)
         if action is not None:
             action()
+            self._view_dirty = True  # orientation changed — force a re-render
 
     def _on_mouse(self, event: int, x: int, y: int, flags: int, param=None) -> None:
         """Drag with the left button held to look around (360 modes only).
@@ -186,6 +203,7 @@ class OpenCvPlayer:
                 pan=-(x - last_x) * _MOUSE_SENSITIVITY,
                 tilt=(y - last_y) * _MOUSE_SENSITIVITY,
             )
+            self._view_dirty = True  # orientation changed — force a re-render
 
     def stop(self) -> None:
         """Release the capture and destroy the window."""
