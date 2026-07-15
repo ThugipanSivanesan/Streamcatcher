@@ -48,8 +48,9 @@ every endpoint.
 | `POST /session/{id}/look/{action}` | Discrete step: `pan_left`, `pan_right`, `tilt_up`, `tilt_down`, `zoom_in`, `zoom_out`. |
 | `DELETE /session/{id}` | Close the session. `204` |
 
-Status codes: unknown session id → `404`; unknown profile name → `422`; unknown
-discrete action → `404`; too many sessions → `429`; the stream won't open → `502`.
+Status codes: unknown session id → `404`; invalid request body (e.g. an unknown
+`projection`) → `422`; unknown discrete action → `404`; too many sessions → `429`;
+the stream won't open → `502`.
 
 Sessions are reaped after an idle timeout (default 300s) and capped in number
 (default 8); tune with `STREAMCATCHER_API_IDLE_TIMEOUT`,

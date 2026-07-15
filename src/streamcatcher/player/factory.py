@@ -10,7 +10,6 @@ from __future__ import annotations
 from streamcatcher.config import Backend, Settings
 from streamcatcher.player.base import Player
 from streamcatcher.player.opencv_player import OpenCvPlayer
-from streamcatcher.player.profiles import get_profile
 from streamcatcher.player.reconnect import ReconnectPolicy
 from streamcatcher.player.stub_player import StubPlayer
 
@@ -24,9 +23,6 @@ def get_player(settings: Settings) -> Player:
     if settings.backend is Backend.STUB:
         return StubPlayer(url)
     if settings.backend is Backend.OPENCV:
-        # A named profile (if given) carries its own projection + mounting
-        # offsets and takes precedence over the bare ``--projection``.
-        profile = get_profile(settings.profile) if settings.profile else None
         policy = ReconnectPolicy(
             enabled=settings.reconnect_enabled,
             base_delay=settings.reconnect_base_delay,
@@ -36,7 +32,6 @@ def get_player(settings: Settings) -> Player:
         return OpenCvPlayer(
             url,
             projection=settings.projection,
-            profile=profile,
             reconnect=policy,
             snapshot_dir=settings.snapshot_dir,
         )

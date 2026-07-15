@@ -12,10 +12,6 @@ Auto-generated from the source docstrings. The headline entry point is
 
 ::: streamcatcher.config
 
-## Camera profiles — `player.profiles`
-
-::: streamcatcher.player.profiles
-
 ## Reprojection — `player.reprojection`
 
 ::: streamcatcher.player.reprojection

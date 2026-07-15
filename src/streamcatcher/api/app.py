@@ -121,9 +121,7 @@ def create_app(settings: Settings | None = None):
     @app.post("/session", response_model=SessionStateResponse, status_code=201)
     def create_session(body: CreateSessionRequest) -> SessionStateResponse:
         try:
-            managed = manager.create(body.url, body.projection, body.profile)
-        except ValueError as exc:  # unknown profile name
-            raise HTTPException(status_code=422, detail=str(exc)) from None
+            managed = manager.create(body.url, body.projection)
         except SessionLimitError as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from None
         except StreamOpenError as exc:

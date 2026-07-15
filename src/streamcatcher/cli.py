@@ -41,18 +41,9 @@ def play(
         None,
         "--projection",
         "-p",
-        help="Frame geometry: 'equirect'/'equirect-180' reproject a 360/hemisphere "
-        "panorama and 'fisheye' undistorts a raw lens, each to a look-around "
-        "viewport (W/A/S/D to aim, +/- to zoom); 'flat' shows frames as-is. "
-        "Defaults to STREAMCATCHER_PROJECTION, or flat.",
-    ),
-    profile: str | None = typer.Option(
-        None,
-        "--profile",
-        help="Named camera preset (e.g. 'ricoh-theta', 'insta360-pro', "
-        "'generic-360', 'generic-180', 'generic-fisheye'). Sets the projection "
-        "and any mounting offsets, overriding --projection. Defaults to "
-        "STREAMCATCHER_PROFILE.",
+        help="Frame geometry: 'equirect' reprojects a 360 panorama to a "
+        "look-around viewport (W/A/S/D to aim, +/- to zoom); 'flat' shows "
+        "frames as-is. Defaults to STREAMCATCHER_PROJECTION, or flat.",
     ),
     reconnect: bool | None = typer.Option(
         None,
@@ -66,7 +57,7 @@ def play(
         "--snapshot",
         metavar="PATH",
         help="Capture a single frame to PATH (e.g. shot.jpg) and exit without "
-        "opening a window. Respects --projection/--profile. During live playback, "
+        "opening a window. Respects --projection. During live playback, "
         "press 'p' instead to save a timestamped snapshot.",
     ),
     snapshot_dir: str | None = typer.Option(
@@ -91,8 +82,6 @@ def play(
         overrides["backend"] = Backend.OPENCV
     if projection is not None:
         overrides["projection"] = projection
-    if profile is not None:
-        overrides["profile"] = profile
     if snapshot_dir is not None:
         overrides["snapshot_dir"] = snapshot_dir
     if reconnect is not None:

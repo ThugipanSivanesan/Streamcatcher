@@ -36,8 +36,8 @@ TCP to reduce dropped high-resolution frames.
 
 ## Look around a 360 stream
 
-Pass a `projection` or a named `profile` to get a steerable viewport. `grab_view()`
-combines a read and a render:
+Pass a `projection` to get a steerable viewport. `grab_view()` combines a read and
+a render:
 
 ```python
 from streamcatcher import StreamSession
@@ -58,15 +58,6 @@ print(session.state())       # ViewState(projection='equirect', yaw_deg=…, pit
 `look()`'s `zoom` is a horizontal-FOV **delta**: negative narrows the view (zooms
 in), positive widens it. In flat mode the look controls are no-ops and `state()`
 reports `None` orientation fields.
-
-Using a camera profile instead:
-
-```python
-from streamcatcher import StreamSession
-from streamcatcher.player.profiles import get_profile
-
-session = StreamSession("rtsp://cam/live", profile=get_profile("ricoh-theta"))
-```
 
 ## Snapshots
 

@@ -1,29 +1,22 @@
-"""Reprojection of 360/fisheye streams to a flat, look-around viewport.
+"""Reprojection of 360 equirectangular streams to a flat, look-around viewport.
 
-A 360 camera streams either an *equirectangular* frame (a 2:1 panorama of the
-whole sphere) or a raw *fisheye* circle. Viewed raw, both look warped. This
-module aims a virtual pinhole camera — an ordinary flat window — at the source,
-so the viewer sees an undistorted slice and can pan/tilt/zoom around it.
+A 360 camera streams an *equirectangular* frame — a 2:1 panorama of the whole
+sphere. Viewed raw it looks warped. This module aims a virtual pinhole camera —
+an ordinary flat window — at the source, so the viewer sees an undistorted slice
+and can pan/tilt/zoom around it.
 
 The lookup tables are built with NumPy only (no OpenCV), so the math is pure,
 deterministic, and unit-testable without a decoder or a display. The player
 feeds the returned ``map_x``/``map_y`` to ``cv2.remap`` to warp each frame.
 
-Two source geometries share one virtual camera:
-
-* :class:`EquirectView` samples an equirectangular panorama. Its ``h_coverage_deg``
-  /``v_coverage_deg`` describe how much of the sphere the frame spans — ``360×180``
-  for a full 360, ``180×180`` for a front-only "equirect-180" hemisphere.
-* :class:`FisheyeView` samples a single raw fisheye lens using the *equidistant*
-  projection (``r = f·θ``). We use a generic equidistant model rather than a
-  calibrated ``cv2.fisheye`` undistort because we have no per-camera distortion
-  coefficients; the lens field of view (``fov_deg``) is the only parameter.
+:class:`EquirectView` is the virtual camera: it samples a full ``360×180``
+equirectangular panorama for whatever slice the current yaw/pitch/hfov select.
 
 Coordinate convention (right-handed camera space): ``+X`` right, ``+Y`` up,
 ``+Z`` forward. ``yaw`` pans left/right about ``+Y``; ``pitch`` tilts up/down
 (positive looks up); ``roll`` rotates about ``+Z`` (used only as a fixed mounting
 offset). ``hfov`` is the horizontal field of view — smaller is more zoomed in.
-Per-profile ``*_offset_deg`` values are fixed rotations added on top of the
+The ``*_offset_deg`` values are fixed mounting rotations added on top of the
 interactive yaw/pitch, so a camera mounted rotated still reads level.
 """
 
@@ -45,7 +38,7 @@ class _SphericalView:
     """A virtual pinhole camera that can look around a spherical source.
 
     Subclasses implement :meth:`_rays_to_source`, mapping the camera-space rays
-    this base builds onto their particular source geometry (equirect, fisheye).
+    this base builds onto their particular source geometry.
     """
 
     def __init__(
@@ -143,57 +136,15 @@ class _SphericalView:
 
 
 class EquirectView(_SphericalView):
-    """A virtual pinhole camera aimed into an equirectangular panorama.
+    """A virtual pinhole camera aimed into a full ``360×180`` equirectangular panorama.
 
-    ``h_coverage_deg``/``v_coverage_deg`` give the sphere span the frame covers:
-    ``360×180`` for a full 360 panorama, ``180×180`` for a front-only hemisphere
-    ("equirect-180"). Rays outside that span map off the frame and render black.
+    Longitude spans the full ``360`` across the frame width and latitude the full
+    ``180`` across its height, so every camera ray lands somewhere on the frame.
     """
-
-    def __init__(
-        self,
-        *args,
-        h_coverage_deg: float = 360.0,
-        v_coverage_deg: float = 180.0,
-        **kwargs,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.h_coverage_deg = float(h_coverage_deg)
-        self.v_coverage_deg = float(v_coverage_deg)
 
     def _rays_to_source(self, x, y, z, src_width, src_height):
         lon = np.arctan2(x, z)  # [-pi, pi]; 0 = forward
         lat = np.arctan2(y, np.sqrt(x * x + z * z))  # [-pi/2, pi/2]
-        map_x = (lon / np.radians(self.h_coverage_deg) + 0.5) * src_width
-        map_y = (0.5 - lat / np.radians(self.v_coverage_deg)) * src_height
-        return map_x, map_y
-
-
-class FisheyeView(_SphericalView):
-    """A virtual pinhole camera aimed into a single equidistant fisheye lens.
-
-    The source is a circular fisheye whose optical axis is ``+Z``. A ray at angle
-    ``θ`` from that axis lands at radius ``r = (θ / (fov/2))·R`` from the image
-    centre (equidistant model), where ``R`` is the fisheye circle radius. Rays
-    beyond the lens's field of view render black.
-    """
-
-    def __init__(self, *args, fov_deg: float = 180.0, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.fov_deg = float(fov_deg)
-
-    def _rays_to_source(self, x, y, z, src_width, src_height):
-        norm = np.sqrt(x * x + y * y + z * z)
-        theta = np.arccos(np.clip(z / norm, -1.0, 1.0))  # angle from the +Z axis
-        phi = np.arctan2(y, x)
-        radius = 0.5 * min(src_width, src_height)  # fisheye circle radius, px
-        r = (theta / np.radians(self.fov_deg / 2.0)) * radius
-        cx, cy = src_width / 2.0, src_height / 2.0
-        map_x = cx + r * np.cos(phi)
-        map_y = cy - r * np.sin(phi)  # image row grows downward; ray +Y is up
-        # Anything past the lens's own field of view isn't captured — send it
-        # off-frame so it renders as the constant border rather than smearing.
-        outside = theta > np.radians(self.fov_deg / 2.0)
-        map_x = np.where(outside, -1.0, map_x)
-        map_y = np.where(outside, -1.0, map_y)
+        map_x = (lon / (2.0 * np.pi) + 0.5) * src_width
+        map_y = (0.5 - lat / np.pi) * src_height
         return map_x, map_y

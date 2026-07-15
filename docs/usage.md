@@ -20,9 +20,6 @@ streamcatcher play rtsp://camera.local:554/stream1 -b opencv
 # View a 360° equirectangular camera with a look-around viewport
 streamcatcher play rtsp://camera.local/live/live -b opencv -p equirect
 
-# Use a named camera profile (sets projection + mounting offsets)
-streamcatcher play rtsp://camera.local/live -b opencv --profile ricoh-theta
-
 # Capture a single frame and exit — no window
 streamcatcher play rtsp://camera.local/live -b opencv --snapshot shot.jpg
 ```
@@ -31,9 +28,9 @@ streamcatcher play rtsp://camera.local/live -b opencv --snapshot shot.jpg
 
 | Key | Action |
 |---|---|
-| `W` / `A` / `S` / `D` | Tilt up / pan left / tilt down / pan right *(360 modes only)* |
-| Mouse drag | Look around by dragging with the left button held *(360 modes only)* |
-| `+` / `-` | Zoom in / out *(360 modes only)* |
+| `W` / `A` / `S` / `D` | Tilt up / pan left / tilt down / pan right *(equirect only)* |
+| Mouse drag | Look around by dragging with the left button held *(equirect only)* |
+| `+` / `-` | Zoom in / out *(equirect only)* |
 | `p` | Save a snapshot |
 | `q` | Quit |
 
@@ -44,14 +41,13 @@ Closing the window also quits.
 | Flag | Values | Env var |
 |---|---|---|
 | `--backend` / `-b` | `opencv` (live window), `stub` (offline, default) | `STREAMCATCHER_BACKEND` |
-| `--projection` / `-p` | `flat` (default), `equirect`, `equirect-180`, `fisheye` | `STREAMCATCHER_PROJECTION` |
-| `--profile` | `flat`, `generic-360`, `generic-180`, `generic-fisheye`, `insta360-pro`, `ricoh-theta` | `STREAMCATCHER_PROFILE` |
+| `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
 | `--snapshot` | `PATH` — save one frame there and exit (no window) | — |
 | `--snapshot-dir` | `DIR` — where the `p` hotkey saves snapshots (created if missing; default: current directory) | `STREAMCATCHER_SNAPSHOT_DIR` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 Every flag has an environment-variable default (prefix `STREAMCATCHER_`); passing
-the flag overrides the env var. A named `--profile` overrides `--projection`.
+the flag overrides the env var.
 
 ### Backends
 
@@ -65,14 +61,10 @@ Pass `-b opencv` (or set `STREAMCATCHER_BACKEND=opencv`) for real playback.
 
 ## Projections
 
-`flat` shows frames unchanged. The other three treat the frame as 360°/wide
-geometry and reproject it into a flat, steerable viewport:
+`flat` shows frames unchanged. `equirect` treats the frame as a full 360°×180°
+equirectangular panorama and reprojects it into a flat, steerable viewport.
 
-- `equirect` — a full 360°×180° equirectangular panorama.
-- `equirect-180` — a front-only 180°×180° hemisphere.
-- `fisheye` — a single raw fisheye lens.
-
-See [360° & cameras](cameras.md) for how these work and which to pick.
+See [360° & cameras](cameras.md) for how this works.
 
 ## Snapshots
 
@@ -85,7 +77,7 @@ Two ways to grab a still:
   if it doesn't exist).
 - **One-shot:** `--snapshot PATH` opens the stream, grabs one rendered frame,
   writes it to `PATH`, and exits without ever opening a window. It respects
-  `--projection` / `--profile`, so the still matches what the window would show.
+  `--projection`, so the still matches what the window would show.
 
 ```console
 streamcatcher play rtsp://cam/live -b opencv -p equirect --snapshot view.jpg

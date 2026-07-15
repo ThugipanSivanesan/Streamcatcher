@@ -10,9 +10,8 @@ open a stream headlessly, drive the look-around, and pull frames over an HTTP AP
 
 !!! note "Status"
     Early development, built in small, tested vertical slices. Live playback, the
-    360°/fisheye look-around viewport, named camera profiles, snapshots,
-    auto-reconnect, and the HTTP control API all work today. Audio is on the
-    roadmap (OpenCV decodes video only).
+    360° equirectangular look-around viewport, snapshots, auto-reconnect, and the
+    HTTP control API all work today. Video only — OpenCV decodes video only.
 
 ## What you can do
 
@@ -27,8 +26,8 @@ open a stream headlessly, drive the look-around, and pull frames over an HTTP AP
 
 -   :material-panorama-sphere: __Look around a 360° camera__
 
-    Reproject an equirectangular panorama, a 180° hemisphere, or a raw fisheye
-    lens into a flat viewport you steer with the keyboard.
+    Reproject an equirectangular 360° panorama into a flat viewport you steer
+    with the keyboard.
 
     [:octicons-arrow-right-24: 360° & cameras](cameras.md)
 

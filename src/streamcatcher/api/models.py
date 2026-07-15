@@ -17,10 +17,6 @@ class CreateSessionRequest(BaseModel):
 
     url: str = Field(description="RTMP/RTSP stream URL (may embed credentials; never echoed back).")
     projection: Projection = Projection.FLAT
-    profile: str | None = Field(
-        default=None,
-        description="Named camera preset; overrides `projection` when set.",
-    )
 
 
 class LookRequest(BaseModel):

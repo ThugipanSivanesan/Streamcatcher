@@ -25,7 +25,6 @@ import uuid
 
 from streamcatcher.config import Projection, Settings
 from streamcatcher.logging_setup import install_secret_redaction
-from streamcatcher.player.profiles import get_profile
 from streamcatcher.player.session import StreamSession, ViewState
 
 log = logging.getLogger("streamcatcher.api.sessions")
@@ -159,14 +158,12 @@ class SessionManager:
         self._idle_timeout = idle_timeout
         self._reader_fps = reader_fps  # >0 gives each session a background reader
 
-    def create(self, url: str, projection: Projection, profile_name: str | None) -> ManagedSession:
+    def create(self, url: str, projection: Projection) -> ManagedSession:
         """Open a new session for ``url`` and register it.
 
-        Raises ``ValueError`` for an unknown profile, :class:`SessionLimitError`
-        when the cap is reached, or ``StreamOpenError`` if the stream won't open.
+        Raises :class:`SessionLimitError` when the cap is reached, or
+        ``StreamOpenError`` if the stream won't open.
         """
-        # Resolve the profile first so a bad name fails before we open anything.
-        profile = get_profile(profile_name) if profile_name else None
         # Seed log redaction with the URL's embedded credentials so they can't
         # leak through any log line this session produces.
         install_secret_redaction(Settings(stream_url=url).secret_values())
@@ -179,7 +176,7 @@ class SessionManager:
 
         # Open outside the manager lock: a blocking open must not stall lookups
         # of other, already-live sessions.
-        session = StreamSession(url, projection=projection, profile=profile)
+        session = StreamSession(url, projection=projection)
         session.open()  # raises StreamOpenError on failure
         session_id = uuid.uuid4().hex
         managed = ManagedSession(session_id, session, reader_fps=self._reader_fps)
