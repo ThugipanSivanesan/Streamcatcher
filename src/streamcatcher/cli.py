@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import typer
+from typer.core import TyperCommand
 
 from streamcatcher.config import Backend, Projection, Settings
 from streamcatcher.logging_setup import install_secret_redaction
@@ -20,12 +22,36 @@ app = typer.Typer(
 log = logging.getLogger("streamcatcher")
 
 
+def _default_snapshot_path() -> str:
+    """A timestamped snapshot filename in the current directory."""
+    return f"streamcatcher-snapshot-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
+
+
+class _OptionalSnapshotPathCommand(TyperCommand):
+    """Let ``--snapshot`` be used either with an output path or as a bare flag.
+
+    Typer string options normally require a value. Normalize a bare option to
+    an attached default before Click parses it, while leaving ``--snapshot PATH``
+    and ``--snapshot=PATH`` untouched.
+    """
+
+    def parse_args(self, ctx, args):
+        normalized = list(args)
+        for index, argument in enumerate(normalized):
+            if argument != "--snapshot":
+                continue
+            is_bare = index == len(normalized) - 1 or normalized[index + 1].startswith("-")
+            if is_bare:
+                normalized[index] = f"--snapshot={_default_snapshot_path()}"
+        return super().parse_args(ctx, normalized)
+
+
 @app.callback()
 def _cli() -> None:
     """Streamcatcher — connect to an RTMP/RTSP stream and view it in a window."""
 
 
-@app.command()
+@app.command(cls=_OptionalSnapshotPathCommand)
 def play(
     url: str = typer.Argument(
         ..., metavar="URL", help="RTMP or RTSP stream URL (rtsp://… or rtmp://…)."
@@ -55,18 +81,10 @@ def play(
     snapshot: str | None = typer.Option(
         None,
         "--snapshot",
-        metavar="PATH",
-        help="Capture a single frame to PATH (e.g. shot.jpg) and exit without "
-        "opening a window. Respects --projection. During live playback, "
-        "press 'p' instead to save a timestamped snapshot.",
-    ),
-    snapshot_dir: str | None = typer.Option(
-        None,
-        "--snapshot-dir",
-        metavar="DIR",
-        help="Directory for snapshots saved with the 'p' hotkey during live "
-        "playback (created if missing). Defaults to STREAMCATCHER_SNAPSHOT_DIR, "
-        "or the current directory.",
+        metavar="[PATH]",
+        help="Capture one frame and exit without opening a window. With no PATH, "
+        "save a timestamped JPEG in the current directory; otherwise save to "
+        "PATH. Respects --projection. During playback, press 'p' instead.",
     ),
 ) -> None:
     """Connect to URL and play the stream (or capture one frame with --snapshot)."""
@@ -82,8 +100,6 @@ def play(
         overrides["backend"] = Backend.OPENCV
     if projection is not None:
         overrides["projection"] = projection
-    if snapshot_dir is not None:
-        overrides["snapshot_dir"] = snapshot_dir
     if reconnect is not None:
         overrides["reconnect_enabled"] = reconnect
     settings = Settings(**overrides)

@@ -17,7 +17,7 @@ powered by OpenCV.
   look-around viewport.
 - **Look around live:** `W`/`A`/`S`/`D` to pan and tilt, `+`/`-` to zoom, `q` to quit.
 - **Snapshots:** press `p` in the viewer to save the current view, or grab one
-  frame headlessly with `--snapshot out.jpg`.
+  frame headlessly with `--snapshot` (current directory) or `--snapshot out.jpg`.
 - **Auto-reconnect:** when a live stream drops, reconnect with exponential
   backoff (retries forever by default; `--no-reconnect` to exit on the first drop).
 - **Offline-first:** the package and the entire test suite run with no network,
@@ -46,20 +46,22 @@ streamcatcher play rtsp://camera.local:554/stream1
 # View a 360° equirectangular camera with a look-around viewport
 streamcatcher play rtsp://123.456.7.890/live/live -p equirect
 
-# Capture a single frame and exit — no window (respects -p)
+# Capture a single frame in the current directory and exit — no window (respects -p)
+streamcatcher play rtsp://cam/live --snapshot
+
+# Or choose the exact output path
 streamcatcher play rtsp://cam/live --snapshot shot.jpg
 ```
 
 In the viewer window: **`W`/`A`/`S`/`D`** (or **drag the mouse**) aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
 The `p` hotkey writes a timestamped `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg`
-in the current directory (or in `--snapshot-dir` if set).
+in the current directory.
 
 | Flag | Values | Env var |
 |---|---|---|
 | `--backend` / `-b` | `opencv` (live window, default), `stub` (offline no-op) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
-| `--snapshot` | `PATH` — save one frame there and exit | — |
-| `--snapshot-dir` | `DIR` — directory for `p`-hotkey snapshots (default: current dir) | `STREAMCATCHER_SNAPSHOT_DIR` |
+| `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 `play` opens a real OpenCV window by default; pass `-b stub` (or set

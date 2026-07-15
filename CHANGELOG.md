@@ -15,9 +15,9 @@ far is unreleased (no version has been tagged yet).
   HTTP API, architecture, security, and an auto-generated API reference), plus this
   changelog and a contributing guide.
 - **Snapshots** — press `p` in the viewer to save the current view to a timestamped
-  file, or capture one frame headlessly with `play --snapshot PATH`. Both respect
-  the active projection/profile. Use `--snapshot-dir DIR`
-  (`STREAMCATCHER_SNAPSHOT_DIR`) to choose where the `p` hotkey writes.
+  file, or capture one frame headlessly with `play --snapshot`, optionally passing
+  an exact output path. Both respect the active projection; snapshots default to
+  the current directory.
 - **Auto-reconnect** — when a live stream drops, the OpenCV backend reconnects with
   exponential backoff (retries forever by default; `--no-reconnect` to opt out).
   The viewport orientation is preserved across a reconnect.

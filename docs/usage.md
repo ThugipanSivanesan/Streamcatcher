@@ -20,7 +20,10 @@ streamcatcher play rtsp://camera.local:554/stream1 -b opencv
 # View a 360° equirectangular camera with a look-around viewport
 streamcatcher play rtsp://camera.local/live/live -b opencv -p equirect
 
-# Capture a single frame and exit — no window
+# Capture a single frame in the current directory and exit — no window
+streamcatcher play rtsp://camera.local/live -b opencv --snapshot
+
+# Or choose the exact output path
 streamcatcher play rtsp://camera.local/live -b opencv --snapshot shot.jpg
 ```
 
@@ -42,12 +45,11 @@ Closing the window also quits.
 |---|---|---|
 | `--backend` / `-b` | `opencv` (live window), `stub` (offline, default) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
-| `--snapshot` | `PATH` — save one frame there and exit (no window) | — |
-| `--snapshot-dir` | `DIR` — where the `p` hotkey saves snapshots (created if missing; default: current directory) | `STREAMCATCHER_SNAPSHOT_DIR` |
+| `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
-Every flag has an environment-variable default (prefix `STREAMCATCHER_`); passing
-the flag overrides the env var.
+Configuration-backed flags use environment-variable defaults with the
+`STREAMCATCHER_` prefix; passing a flag overrides its environment value.
 
 ### Backends
 
@@ -72,12 +74,12 @@ Two ways to grab a still:
 
 - **Live:** press `p` in the viewer. The current view (the reprojected viewport in
   360 modes, the raw frame when flat) is written to a timestamped
-  `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg` in the current directory — or in
-  the directory given by `--snapshot-dir` / `STREAMCATCHER_SNAPSHOT_DIR` (created
-  if it doesn't exist).
-- **One-shot:** `--snapshot PATH` opens the stream, grabs one rendered frame,
-  writes it to `PATH`, and exits without ever opening a window. It respects
-  `--projection`, so the still matches what the window would show.
+  `streamcatcher-snapshot-YYYYMMDD-HHMMSS.jpg` in the current directory.
+- **One-shot:** `--snapshot` opens the stream, grabs one rendered frame, writes a
+  timestamped JPEG in the current directory, and exits without creating a window.
+  Pass `--snapshot PATH` to write it to an exact custom path; missing parent
+  directories are created automatically. It respects `--projection`, so the
+  still matches what the window would show.
 
 ```console
 streamcatcher play rtsp://cam/live -b opencv -p equirect --snapshot view.jpg
