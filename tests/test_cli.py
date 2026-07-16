@@ -149,6 +149,47 @@ def test_play_snapshot_without_path_defaults_to_current_directory(fake_cv2, tmp_
     assert fake_cv2.imshow_calls == 0
 
 
+def test_play_bare_snapshot_before_url_defaults_and_keeps_the_url(fake_cv2, tmp_path, monkeypatch):
+    # A bare --snapshot placed before the positional URL must not swallow the
+    # URL as its path: the stream URL is recognised and the snapshot defaults.
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["play", "--snapshot", "rtsp://cam.local/stream1", "-b", "opencv"],
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"  # URL parsed, not consumed
+    assert fake_cv2.imwrite_calls == 1
+    saved_path = Path(fake_cv2.written[0][0])
+    assert saved_path.name.startswith("streamcatcher-snapshot-")
+    assert saved_path.resolve().parent == tmp_path.resolve()
+    assert fake_cv2.imshow_calls == 0  # snapshot mode, no window
+
+
+def test_play_bare_snapshot_before_rtmp_url_defaults(fake_cv2, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["play", "--snapshot", "rtmp://cam.local/live", "-b", "opencv"],
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.last_capture.url == "rtmp://cam.local/live"
+    assert fake_cv2.imwrite_calls == 1
+    assert Path(fake_cv2.written[0][0]).name.startswith("streamcatcher-snapshot-")
+
+
+def test_play_explicit_snapshot_path_before_url_is_honored(fake_cv2, tmp_path):
+    # An explicit path before the URL is still taken as the path, not defaulted.
+    target = tmp_path / "shot.jpg"
+    result = runner.invoke(
+        app,
+        ["play", "--snapshot", str(target), "rtsp://cam.local/stream1", "-b", "opencv"],
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"
+    assert fake_cv2.written[0][0] == str(target)
+
+
 def test_play_rejects_removed_snapshot_dir_option(tmp_path):
     result = runner.invoke(
         app,
