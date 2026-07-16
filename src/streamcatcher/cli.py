@@ -27,12 +27,28 @@ def _default_snapshot_path() -> str:
     return f"streamcatcher-snapshot-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
 
 
+# Schemes a stream URL uses. A snapshot output is always a local file, never a
+# stream URL, so a token with one of these schemes right after a bare
+# ``--snapshot`` is the URL argument, not the snapshot path (see below).
+_STREAM_URL_SCHEMES = ("rtsp://", "rtmp://")
+
+
+def _looks_like_stream_url(token: str) -> bool:
+    """Whether ``token`` is a stream URL rather than a snapshot output path."""
+    return token.lower().startswith(_STREAM_URL_SCHEMES)
+
+
 class _OptionalSnapshotPathCommand(TyperCommand):
     """Let ``--snapshot`` be used either with an output path or as a bare flag.
 
     Typer string options normally require a value. Normalize a bare option to
     an attached default before Click parses it, while leaving ``--snapshot PATH``
     and ``--snapshot=PATH`` untouched.
+
+    ``--snapshot`` is treated as bare when it is the last token, when the next
+    token is another option (``-``…), or when the next token is the stream URL
+    itself — so ``play --snapshot rtsp://cam/stream`` (option before the URL)
+    captures to the default path instead of swallowing the URL as the path.
     """
 
     def parse_args(self, ctx, args):
@@ -40,7 +56,10 @@ class _OptionalSnapshotPathCommand(TyperCommand):
         for index, argument in enumerate(normalized):
             if argument != "--snapshot":
                 continue
-            is_bare = index == len(normalized) - 1 or normalized[index + 1].startswith("-")
+            following = normalized[index + 1] if index + 1 < len(normalized) else None
+            is_bare = (
+                following is None or following.startswith("-") or _looks_like_stream_url(following)
+            )
             if is_bare:
                 normalized[index] = f"--snapshot={_default_snapshot_path()}"
         return super().parse_args(ctx, normalized)
