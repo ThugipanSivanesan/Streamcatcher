@@ -50,7 +50,7 @@ open a stream headlessly, drive the look-around, and pull frames over an HTTP AP
 ## Quick start
 
 ```console
-pip install git+https://github.com/ThugipanSivanesan/Streamcatcher
+pip install streamcatcher
 
 # View a plain 2D stream
 streamcatcher play rtsp://camera.local:554/stream1 -b opencv

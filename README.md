@@ -1,5 +1,9 @@
 # Streamcatcher
 
+[![PyPI version](https://img.shields.io/pypi/v/streamcatcher.svg)](https://pypi.org/project/streamcatcher/)
+[![Python versions](https://img.shields.io/pypi/pyversions/streamcatcher.svg)](https://pypi.org/project/streamcatcher/)
+[![License: MIT](https://img.shields.io/pypi/l/streamcatcher.svg)](LICENSE)
+
 A cross-platform Python CLI that connects to an **RTSP** or **RTMP** video stream
 and views it in a small desktop window — including **360° panoramic cameras**,
 which it reprojects into a flat pan/tilt/zoom "look-around" viewport. Pure Python,
@@ -28,7 +32,13 @@ powered by OpenCV.
 
 ## Install
 
-Requires **Python 3.12+**. Streamcatcher is not on PyPI yet, so install from source:
+Requires **Python 3.12+**.
+
+```console
+pip install streamcatcher
+```
+
+Or install the latest unreleased code straight from source:
 
 ```console
 pip install git+https://github.com/ThugipanSivanesan/Streamcatcher

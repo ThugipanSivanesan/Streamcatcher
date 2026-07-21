@@ -4,10 +4,13 @@ All notable changes to Streamcatcher are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The project is pre-1.0 and built in small, tested vertical slices; everything so
-far is unreleased (no version has been tagged yet).
+The project is pre-1.0 and built in small, tested vertical slices.
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-07-21
+
+First release on PyPI: `pip install streamcatcher`.
 
 ### Added
 
@@ -27,11 +30,9 @@ far is unreleased (no version has been tagged yet).
   back; optional bearer-token auth. An optional per-session background reader
   (`STREAMCATCHER_API_READER_ENABLED`) keeps the latest frame cached so requests
   don't block on a read.
-- **Camera profiles** — named presets (`ricoh-theta`, `insta360-pro`,
-  `generic-360/180/fisheye`, `flat`) that set the projection and mounting offsets.
-- **360°, 180°, and fisheye viewports** — pure-NumPy equirectangular→pinhole and
-  fisheye→pinhole reprojection into a flat, steerable look-around view
-  (`W/A/S/D` or **mouse drag** to aim, `+/-` to zoom).
+- **360° equirectangular viewport** — pure-NumPy equirectangular→pinhole
+  reprojection into a flat, steerable look-around view (`W/A/S/D` or **mouse drag**
+  to aim, `+/-` to zoom).
 - **Live OpenCV player** — view RTSP/RTMP streams in a native window from a plain
   Python CLI on macOS, Linux, and Windows (video only, no audio). RTSP is forced
   over TCP.
@@ -47,4 +48,5 @@ far is unreleased (no version has been tagged yet).
   window without an external media player (fixes a macOS windowing blocker). This
   made playback **video-only** — audio is no longer in scope.
 
-[Unreleased]: https://github.com/ThugipanSivanesan/Streamcatcher/commits/main
+[Unreleased]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ThugipanSivanesan/Streamcatcher/releases/tag/v0.1.0
