@@ -1,15 +1,20 @@
 # Installation
 
-Streamcatcher requires **Python 3.12+** and is not on PyPI yet, so install it
-straight from source.
+Streamcatcher requires **Python 3.12+**.
 
 ## Core CLI
+
+```console
+pip install streamcatcher
+```
+
+To install the latest unreleased code instead, install straight from the repo:
 
 ```console
 pip install git+https://github.com/ThugipanSivanesan/Streamcatcher
 ```
 
-This pulls in `opencv-python` for the live viewer — **no separate system media
+Either way this pulls in `opencv-python` for the live viewer — **no separate system media
 player (VLC, an ffmpeg app, …) is required**. OpenCV opens and pumps its own
 native window from a plain Python process, including on macOS.
 
@@ -44,11 +49,12 @@ See [Contributing](contributing.md) for the full development workflow.
 streamcatcher --help
 ```
 
-The default `stub` backend needs nothing beyond the core install and runs fully
+The offline `stub` backend needs nothing beyond the core install and runs fully
 offline, so this works even without a camera on hand:
 
 ```console
-streamcatcher play rtsp://example/stream   # stub backend: a no-op that logs
+streamcatcher play rtsp://example/stream -b stub   # no-op backend that logs
 ```
 
-Pass `-b opencv` to open a real window against a real stream.
+`play` defaults to the `opencv` backend, which opens a real window against a real
+stream; pass `-b stub` (as above) for the offline no-op used in development and tests.
