@@ -55,3 +55,44 @@ jobs:
           enable-cache: true
       - run: uv sync --group docs # docs toolchain; mkdocstrings reads the source statically
       - run: uv run mkdocs build --strict
+  headless:
+    name: Headless OpenCV smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      # Install the package, then swap the GUI OpenCV build for the headless one.
+      # No libGL/system GUI libs are installed on this runner, so this doubles as
+      # a check that serve/--snapshot don't need them.
+      - name: Install with opencv-python-headless
+        run: |
+          uv venv
+          uv pip install '.[api]'
+          uv pip uninstall opencv-python
+          uv pip install opencv-python-headless
+      # --no-sync keeps `uv run` from re-adding opencv-python and undoing the swap.
+      - name: CLI imports and runs headless
+        run: uv run --no-sync streamcatcher --help
+      - name: play exits with the friendly error, not a raw cv2.error
+        run: |
+          uv run --no-sync python - <<'PY'
+          from streamcatcher.player.opencv_player import OpenCvPlayer, StreamOpenError
+          try:
+              OpenCvPlayer("rtsp://127.0.0.1:1/none").play()
+          except StreamOpenError as exc:
+              assert "opencv-python" in str(exc), exc
+              print("OK: friendly headless error ->", exc)
+          else:
+              raise SystemExit("expected StreamOpenError on a headless build")
+          PY
+      - name: headless frame-encode path works (what serve/--snapshot use)
+        run: |
+          uv run --no-sync python - <<'PY'
+          import numpy as np, cv2
+          ok, buf = cv2.imencode(".jpg", np.zeros((8, 16, 3), "uint8"))
+          assert ok and len(buf) > 0
+          print("OK: cv2.imencode works headless")
+          PY

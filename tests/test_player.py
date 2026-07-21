@@ -114,6 +114,30 @@ def test_opencv_player_play_raises_when_stream_unopenable(fake_cv2):
         OpenCvPlayer("rtsp://cam/stream").play()
 
 
+def test_opencv_player_play_on_headless_build_raises_friendly_error(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer, StreamOpenError
+
+    fake_cv2.gui_available = False  # opencv-python-headless: no window backend
+    with pytest.raises(StreamOpenError, match="opencv-python"):
+        OpenCvPlayer("rtsp://cam/stream").play()
+
+    # Fails fast on the window, before any network connection or frame display.
+    assert fake_cv2.captures == []
+    assert fake_cv2.imshow_calls == 0
+
+
+def test_opencv_player_snapshot_works_on_headless_build(fake_cv2, tmp_path):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    # --snapshot never opens a window, so it must work on a headless OpenCV build.
+    fake_cv2.gui_available = False
+    player = OpenCvPlayer("rtsp://cam/stream")
+    player.snapshot(str(tmp_path / "shot.jpg"))
+
+    assert fake_cv2.imwrite_calls == 1
+    assert fake_cv2.named_windows == []  # no GUI was touched
+
+
 def test_opencv_player_is_playing_reflects_capture(fake_cv2):
     from streamcatcher.player.opencv_player import OpenCvPlayer
 

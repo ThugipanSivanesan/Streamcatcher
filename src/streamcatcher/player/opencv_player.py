@@ -33,6 +33,18 @@ log = logging.getLogger("streamcatcher.player.opencv")
 
 _WINDOW_TITLE = "Streamcatcher"
 
+# Shown when highgui is missing — i.e. opencv-python-headless is installed. That
+# build ships cv2 but no window backend, so the first ``namedWindow``/``imshow``
+# raises ``cv2.error`` ("rebuild the library with … support"). We translate it
+# into this actionable message instead of leaking the cryptic OpenCV error.
+_GUI_HELP = (
+    "The live viewer needs the desktop build of OpenCV, but this looks like "
+    "opencv-python-headless, which has no window support. Install the desktop "
+    "build with 'pip install opencv-python' to open a window, or use the "
+    "headless features instead: 'streamcatcher serve' (HTTP API) and "
+    "'streamcatcher play --snapshot' both work without a GUI."
+)
+
 # waitKey timeout in milliseconds. 1ms yields to the highgui event loop each
 # frame while keeping the window responsive.
 _WAITKEY_MS = 1
@@ -74,22 +86,29 @@ class OpenCvPlayer:
     def play(self) -> None:
         """Open the stream and show frames until the window closes or 'q' is hit."""
         cv2 = _load_cv2()
-        self._session.open()
-        if self._session.is_360:
-            log.info(
-                "360 viewport enabled. Look around: W/A/S/D or drag the mouse, zoom: +/-, quit: q."
-            )
-        log.info("Press 'p' to save a snapshot.")
-
-        cv2.namedWindow(_WINDOW_TITLE, cv2.WINDOW_NORMAL)
+        # Create the window before touching the network so a headless OpenCV
+        # build fails fast with a clear message instead of connecting first and
+        # then dying on the cryptic highgui ``cv2.error``.
+        try:
+            cv2.namedWindow(_WINDOW_TITLE, cv2.WINDOW_NORMAL)
+        except cv2.error as exc:
+            raise StreamOpenError(_GUI_HELP) from exc
         cv2.setMouseCallback(_WINDOW_TITLE, self._on_mouse)
         self._window_open = True
-        # A background thread owns the blocking reads so decode jitter can't
-        # freeze the window or the look-around keys; the loop below renders the
-        # freshest frame at its own cadence and stays responsive to input.
-        reader = FrameReader(self._session)
-        reader.start()
+        reader = None
         try:
+            self._session.open()
+            if self._session.is_360:
+                log.info(
+                    "360 viewport enabled. Look around: W/A/S/D or drag the mouse, "
+                    "zoom: +/-, quit: q."
+                )
+            log.info("Press 'p' to save a snapshot.")
+            # A background thread owns the blocking reads so decode jitter can't
+            # freeze the window or the look-around keys; the loop below renders
+            # the freshest frame at its own cadence and stays responsive.
+            reader = FrameReader(self._session)
+            reader.start()
             while True:
                 raw = reader.latest()
                 # Re-render only when there's a new frame or the viewport moved,
@@ -117,7 +136,8 @@ class OpenCvPlayer:
         except KeyboardInterrupt:
             log.info("Interrupted — closing the stream.")
         finally:
-            reader.stop()
+            if reader is not None:
+                reader.stop()
             self.stop()
 
     def _reconnect(self, cv2) -> bool:

@@ -47,6 +47,23 @@ pip install git+https://github.com/ThugipanSivanesan/Streamcatcher
 The live viewer pulls in `opencv-python`; no separate system media player (VLC,
 ffmpeg app, …) is required.
 
+### Headless / server install
+
+On a server, container, or CI box you don't need the desktop window — and the
+default GUI build's system libraries (`libGL.so.1` on Linux) may be missing.
+Swap in the headless OpenCV build so `serve` and `--snapshot` run without them:
+
+```console
+pip install streamcatcher
+pip uninstall opencv-python
+pip install opencv-python-headless
+```
+
+`streamcatcher serve` and `streamcatcher play --snapshot` work fully headless.
+Only the live `play` window needs the default `opencv-python` build; on a
+headless build it exits with a clear message instead of a cryptic OpenCV error.
+(The two wheels both provide `cv2` and can't coexist, so it's a swap, not an extra.)
+
 ## Usage
 
 ```console

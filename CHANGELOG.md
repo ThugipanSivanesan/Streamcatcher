@@ -8,6 +8,20 @@ The project is pre-1.0 and built in small, tested vertical slices.
 
 ## [Unreleased]
 
+### Added
+
+- **Headless / server support** — documented the `opencv-python-headless` swap so
+  `streamcatcher serve` and `streamcatcher play --snapshot` run on machines with no
+  display or GUI system libraries (`libGL.so.1` on Linux). A CI smoke job now
+  exercises the headless build.
+
+### Changed
+
+- `play`'s live window now exits with a clear, actionable message when run against a
+  headless OpenCV build, instead of dying on a cryptic highgui `cv2.error`. The
+  window is also created before the network connection, so headless machines fail
+  fast without first opening the stream.
+
 ## [0.1.0] - 2026-07-21
 
 First release on PyPI: `pip install streamcatcher`.
