@@ -1,6 +1,6 @@
 [project]
 name = "streamcatcher"
-version = "0.1.0"
+version = "0.2.0"
 description = "A cross-platform CLI to view RTMP/RTSP video streams (incl. 360) in a small window."
 readme = "README.md"
 requires-python = ">=3.12"

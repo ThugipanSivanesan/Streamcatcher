@@ -8,6 +8,8 @@ The project is pre-1.0 and built in small, tested vertical slices.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-21
+
 ### Added
 
 - **Headless / server support** — documented the `opencv-python-headless` swap so
@@ -62,5 +64,6 @@ First release on PyPI: `pip install streamcatcher`.
   window without an external media player (fixes a macOS windowing blocker). This
   made playback **video-only** — audio is no longer in scope.
 
-[Unreleased]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ThugipanSivanesan/Streamcatcher/releases/tag/v0.1.0
