@@ -1,0 +1,50 @@
+name: Release
+# Publishes to PyPI via Trusted Publishing (OIDC) — no API token stored in the
+# repo. Fires when a v* tag is pushed; the tag must match the version in
+# pyproject.toml. Register this repo+workflow as a trusted publisher on PyPI
+# first: https://pypi.org/manage/account/publishing/
+on:
+  push:
+    tags: ["v*"]
+permissions: { contents: read }
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    name: Build & check distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Verify tag matches package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(uv version --short)"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match pyproject version $pkg"
+            exit 1
+          fi
+      - run: uv build
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi # gate releases behind a protected environment in repo settings
+    permissions:
+      id-token: write # OIDC token for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0

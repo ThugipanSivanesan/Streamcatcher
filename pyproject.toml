@@ -1,6 +1,6 @@
 [project]
 name = "streamcatcher"
-version = "0.0.1"
+version = "0.1.0"
 description = "A cross-platform CLI to view RTMP/RTSP video streams (incl. 360) in a small window."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,6 +8,21 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Thugipan Sivanesan", email = "thugipan@gmail.com" }]
 keywords = ["rtsp", "rtmp", "stream", "cli", "opencv", "360", "equirectangular"]
+# No "License ::" classifiers: the SPDX `license` field above supersedes them,
+# and mixing the two is rejected by current build backends.
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Video :: Display",
+    "Typing :: Typed",
+]
 dependencies = [
     "opencv-python>=4.10.0",
     "numpy>=2.0",
@@ -24,8 +39,15 @@ api = [
     "uvicorn>=0.32",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ThugipanSivanesan/Streamcatcher"
+Repository = "https://github.com/ThugipanSivanesan/Streamcatcher"
+Documentation = "https://thugipansivanesan.github.io/Streamcatcher/"
+Issues = "https://github.com/ThugipanSivanesan/Streamcatcher/issues"
+Changelog = "https://github.com/ThugipanSivanesan/Streamcatcher/blob/main/CHANGELOG.md"
+
 [project.scripts]
-streamcatcher = "streamcatcher.cli:app"
+streamcatcher = "streamcatcher.cli:main"
 
 [dependency-groups]
 dev = [
