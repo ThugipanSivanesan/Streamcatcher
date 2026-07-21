@@ -67,7 +67,9 @@ def _load_cv2():
         import cv2
     except ImportError as exc:  # pragma: no cover - exercised via the fake in tests
         raise StreamOpenError(
-            "OpenCV (cv2) is not installed. Install it with 'pip install opencv-python'."
+            "OpenCV (cv2) is not installed. Install the desktop build with "
+            "'pip install opencv-python', or the server build with "
+            "'pip install opencv-python-headless' (serve / --snapshot only)."
         ) from exc
     return cv2
 

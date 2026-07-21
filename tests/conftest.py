@@ -45,6 +45,9 @@ class _FakeCapture:
 class _FakeCv2:
     """Minimal fake of the ``cv2`` module used by :mod:`opencv_player`."""
 
+    class error(Exception):  # noqa: N801 - mirrors the real ``cv2.error`` type
+        """Stand-in for ``cv2.error``, raised by highgui on a headless build."""
+
     # Constants the player reads off the module.
     CAP_FFMPEG = 1900
     CAP_PROP_BUFFERSIZE = 38
@@ -68,6 +71,8 @@ class _FakeCv2:
         self.written: list[tuple[str, object]] = []  # (path, frame) per imwrite
         # Knobs the tests set to script behaviour.
         self.open_ok = True
+        # Set False to emulate opencv-python-headless: highgui raises ``cv2.error``.
+        self.gui_available = True
         self.imwrite_ok = True  # scripts imwrite's success return
         self.frames = 3
         self.keys: list[int] = []  # scripted waitKey return values
@@ -96,6 +101,11 @@ class _FakeCv2:
         return cap
 
     def namedWindow(self, title, flags=0):  # noqa: N802
+        if not self.gui_available:
+            raise self.error(
+                "OpenCV: The function is not implemented. Rebuild the library "
+                "with Windows, GTK+ 2.x or Cocoa support."
+            )
         self.named_windows.append(title)
 
     def setMouseCallback(self, title, callback, param=None):  # noqa: N802 - cv2 API
