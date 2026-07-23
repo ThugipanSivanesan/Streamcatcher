@@ -55,7 +55,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
     "pre-commit>=4.6.0",
-    "httpx>=0.28",  # Starlette's TestClient transport, for the API tests
+    "httpx2>=2.0",  # Starlette's TestClient transport, for the API tests
 ]
 # Documentation site (mkdocs-material + API reference from docstrings). Kept in
 # its own group so it isn't pulled into the default dev/test environment.
