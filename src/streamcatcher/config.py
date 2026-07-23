@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     record_mode: RecordMode = RecordMode.OPENCV  # opencv (video only) or ffmpeg (lossless + audio)
     record_fps: float = 25.0  # fallback frame rate when the stream doesn't report one (opencv)
     record_fourcc: str = "mp4v"  # cv2.VideoWriter codec fourcc (opencv mode)
+    # Optional cap on recording length, in seconds. None (the default) records
+    # until playback stops (q / window close / Ctrl-C); a positive value stops
+    # the recording — and playback — that many seconds after the first frame.
+    record_duration: float | None = None
 
     # HTTP control API (`streamcatcher serve`). All optional; sensible for a
     # single-user, localhost-bound control surface.

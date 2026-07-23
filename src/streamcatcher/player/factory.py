@@ -49,6 +49,7 @@ def get_player(settings: Settings, record_path: str | None = None) -> Player:
             projection=settings.projection,
             reconnect=policy,
             recorder=recorder,
+            record_duration=settings.record_duration if record_path is not None else None,
         )
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive

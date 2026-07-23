@@ -133,6 +133,14 @@ def play(
         "no audio), 'ffmpeg' copies the original stream losslessly with audio "
         "(needs the ffmpeg binary). Defaults to STREAMCATCHER_RECORD_MODE, or opencv.",
     ),
+    duration: float | None = typer.Option(
+        None,
+        "--duration",
+        metavar="SECONDS",
+        help="Stop recording (and playback) this many seconds after the first "
+        "frame. Requires --record; without it a recording runs until you quit. "
+        "Defaults to STREAMCATCHER_RECORD_DURATION.",
+    ),
 ) -> None:
     """Connect to URL and play the stream (optionally recording, or one --snapshot)."""
     if snapshot is not None and record is not None:
@@ -140,6 +148,14 @@ def play(
             "--snapshot captures a single frame and exits, so it can't be combined "
             "with --record. Use one or the other."
         )
+    if duration is not None:
+        if record is None:
+            raise typer.BadParameter(
+                "--duration limits how long --record runs, so it needs --record. "
+                "Add --record to capture the stream, or drop --duration."
+            )
+        if duration <= 0:
+            raise typer.BadParameter("--duration must be a positive number of seconds.")
     # Pass flags only when given so the STREAMCATCHER_* env vars still apply as
     # defaults; an explicit flag overrides them.
     overrides: dict[str, object] = {"stream_url": url}
@@ -156,6 +172,8 @@ def play(
         overrides["reconnect_enabled"] = reconnect
     if record_mode is not None:
         overrides["record_mode"] = record_mode
+    if duration is not None:
+        overrides["record_duration"] = duration
     settings = Settings(**overrides)
     # Seed redaction with the raw URL so credentials can't leak anywhere in logs.
     install_secret_redaction(settings.secret_values())

@@ -19,6 +19,10 @@ The project is pre-1.0 and built in small, tested vertical slices.
   panorama, and rolls to a new numbered segment if the stream resolution changes.
   `--record` and `--snapshot` are mutually exclusive. New `STREAMCATCHER_RECORD_*`
   settings tune the mode, fallback fps, and codec.
+- **Timed recording** — `--duration SECONDS` (env `STREAMCATCHER_RECORD_DURATION`)
+  caps a recording: playback and recording stop automatically that many seconds
+  after the first recorded frame. Works in both record modes and requires
+  `--record`; without it a recording runs open-ended until you quit.
 
 ## [0.2.0] - 2026-07-21
 

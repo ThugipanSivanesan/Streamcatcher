@@ -75,11 +75,17 @@ class OpenCvPlayer:
         projection: Projection = Projection.FLAT,
         reconnect: ReconnectPolicy | None = None,
         recorder: Recorder | None = None,
+        record_duration: float | None = None,
     ) -> None:
         self._session = StreamSession(url, projection)
         self._policy = reconnect or ReconnectPolicy()
         self._recorder = recorder  # None unless --record was requested
         self._recording = False  # the recorder has been started (lazily, on frame 1)
+        # Optional recording length cap (seconds). The deadline is a monotonic
+        # timestamp set when recording actually starts (the first frame), so the
+        # limit measures recorded time, not time spent waiting for a frame.
+        self._record_duration = record_duration
+        self._record_deadline: float | None = None
         self._window_open = False
         self._last_frame = None  # most recently rendered frame, for the 'p' snapshot
         self._last_raw = None  # raw frame behind _last_frame, to skip re-rendering it
@@ -128,6 +134,9 @@ class OpenCvPlayer:
                         # rendered viewport, so a recording doesn't follow the look.
                         self._record(raw)
                         self._last_raw = raw
+                if self._record_duration_reached():
+                    log.info("Reached the recording duration limit — stopping.")
+                    break
                 key = cv2.waitKey(_WAITKEY_MS) & 0xFF
                 if key == ord("q"):
                     break
@@ -253,11 +262,22 @@ class OpenCvPlayer:
             if not self._recording:
                 self._recorder.start(raw, self._session.capture_fps())
                 self._recording = True
+                if self._record_duration is not None:
+                    self._record_deadline = time.monotonic() + self._record_duration
+                    log.info("Recording for up to %.0fs.", self._record_duration)
             self._recorder.write(raw)
         except RecordError as exc:
             log.warning("Recording stopped: %s", exc)
             self._stop_recording()
             self._recorder = None
+
+    def _record_duration_reached(self) -> bool:
+        """Whether recording has run for its configured ``--duration`` limit.
+
+        Always ``False`` until recording starts and when no duration was set, so
+        this is a no-op for open-ended recordings and for plain playback.
+        """
+        return self._record_deadline is not None and time.monotonic() >= self._record_deadline
 
     def _stop_recording(self) -> None:
         """Finalize the recording, if any (safe to call more than once)."""

@@ -11,8 +11,8 @@ powered by OpenCV.
 
 > **Status:** early development, built in small, tested vertical slices. Live
 > video playback, the 360° equirectangular look-around viewport, snapshots,
-> auto-reconnect, and an HTTP control API all work today. Video only — OpenCV
-> does not decode audio.
+> recording, auto-reconnect, and an HTTP control API all work today. Video only in
+> the live window — OpenCV does not decode audio (the `ffmpeg` record mode keeps it).
 
 ## Features
 
@@ -22,6 +22,9 @@ powered by OpenCV.
 - **Look around live:** `W`/`A`/`S`/`D` to pan and tilt, `+`/`-` to zoom, `q` to quit.
 - **Snapshots:** press `p` in the viewer to save the current view, or grab one
   frame headlessly with `--snapshot` (current directory) or `--snapshot out.jpg`.
+- **Recording:** capture a stream to a file while you watch with `--record` — an
+  `opencv` mode (video only, no extra dependency) or a lossless, audio-keeping
+  `ffmpeg` mode. Cap the length with `--duration SECONDS`.
 - **Auto-reconnect:** when a live stream drops, reconnect with exponential
   backoff (retries forever by default; `--no-reconnect` to exit on the first drop).
 - **Offline-first:** the package and the entire test suite run with no network,
@@ -78,6 +81,12 @@ streamcatcher play rtsp://cam/live --snapshot
 
 # Or choose the exact output path
 streamcatcher play rtsp://cam/live --snapshot shot.jpg
+
+# Record the stream to a file while you watch it (bare --record → timestamped .mp4)
+streamcatcher play rtsp://cam/live --record capture.mp4
+
+# Record losslessly with audio (needs the ffmpeg binary), capped at 60 seconds
+streamcatcher play rtsp://cam/live --record capture.mp4 --record-mode ffmpeg --duration 60
 ```
 
 In the viewer window: **`W`/`A`/`S`/`D`** (or **drag the mouse**) aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
@@ -89,6 +98,9 @@ in the current directory.
 | `--backend` / `-b` | `opencv` (live window, default), `stub` (offline no-op) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
 | `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
+| `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` | — |
+| `--record-mode` | `opencv` (default, video only), `ffmpeg` (lossless + audio) | `STREAMCATCHER_RECORD_MODE` |
+| `--duration` | `SECONDS` — stop recording and playback after the first frame; requires `--record` | `STREAMCATCHER_RECORD_DURATION` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 `play` opens a real OpenCV window by default; pass `-b stub` (or set

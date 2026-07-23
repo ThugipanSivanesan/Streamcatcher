@@ -593,3 +593,53 @@ def test_factory_rejects_recording_on_stub_backend():
     settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.STUB)
     with pytest.raises(ValueError, match="opencv"):
         get_player(settings, record_path="out.mp4")
+
+
+# --- recording duration limit ----------------------------------------------
+
+
+def test_opencv_player_stops_when_record_duration_reached(fake_cv2, caplog):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    # A zero-second limit makes the deadline equal to the moment recording
+    # starts, so the very next tick is already past it — a deterministic way to
+    # prove the duration check ends the session. Reconnect stays on (its default),
+    # so only the duration limit can stop this otherwise-forever run.
+    recorder = _FakeRecorder()
+    with caplog.at_level(logging.INFO):
+        OpenCvPlayer("rtsp://cam/stream", recorder=recorder, record_duration=0.0).play()
+
+    assert recorder.started_with is not None  # recording actually began
+    assert recorder.stops == 1  # finalized on the way out
+    assert "Reached the recording duration limit" in caplog.text
+
+
+def test_opencv_player_without_duration_never_sets_a_deadline(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    recorder = _FakeRecorder()
+    player = OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY, recorder=recorder)
+    player.play()
+
+    assert player._record_deadline is None  # open-ended recording, no time cap
+
+
+def test_factory_passes_record_duration_to_player(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    settings = Settings(
+        stream_url="rtsp://cam/stream", backend=Backend.OPENCV, record_duration=12.0
+    )
+    player = get_player(settings, record_path="out.mp4")
+    assert isinstance(player, OpenCvPlayer)
+    assert player._record_duration == 12.0
+
+
+def test_factory_ignores_record_duration_without_recording(fake_cv2):
+    # A configured duration only applies when actually recording; a plain play
+    # (no record_path) must not inherit a time cap.
+    settings = Settings(
+        stream_url="rtsp://cam/stream", backend=Backend.OPENCV, record_duration=12.0
+    )
+    player = get_player(settings)
+    assert player._record_duration is None

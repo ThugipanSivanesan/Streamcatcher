@@ -31,6 +31,9 @@ streamcatcher play rtsp://camera.local/live -b opencv --record capture.mp4
 
 # Record losslessly with audio (needs the ffmpeg binary on PATH)
 streamcatcher play rtsp://camera.local/live -b opencv --record capture.mp4 --record-mode ffmpeg
+
+# Record a fixed length, then stop automatically (here: 30 seconds)
+streamcatcher play rtsp://camera.local/live -b opencv --record capture.mp4 --duration 30
 ```
 
 ### In the viewer window
@@ -54,6 +57,7 @@ Closing the window also quits.
 | `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
 | `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` | — |
 | `--record-mode` | `opencv` (default), `ffmpeg` | `STREAMCATCHER_RECORD_MODE` |
+| `--duration` | `SECONDS` — stop recording and playback this long after the first frame; requires `--record` | `STREAMCATCHER_RECORD_DURATION` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 Configuration-backed flags use environment-variable defaults with the
@@ -99,8 +103,11 @@ Record a live stream to a file while you watch it with `--record`. Like
 `--snapshot`, the path is optional — bare `--record` writes a timestamped
 `streamcatcher-recording-YYYYMMDD-HHMMSS.mp4` in the current directory; missing
 parent directories are created. `--record` and `--snapshot` can't be combined
-(snapshot captures one frame and exits). The recording is finalized when you
-quit (`q` / close the window / `Ctrl-C`).
+(snapshot captures one frame and exits). By default there is **no time limit** —
+the recording runs until you quit (`q` / close the window / `Ctrl-C`), or, if
+`--no-reconnect` is set, until the stream ends. Pass `--duration SECONDS` to cap
+it: recording (and playback) stop automatically that many seconds after the
+first frame. The recording is always finalized on the way out.
 
 Two modes, chosen with `--record-mode`:
 
@@ -115,7 +122,16 @@ streamcatcher play rtsp://cam/live -b opencv --record capture.mp4
 
 # ffmpeg mode — lossless, with audio (install ffmpeg first)
 streamcatcher play rtsp://cam/live -b opencv --record capture.mp4 --record-mode ffmpeg
+
+# Fixed-length capture — records ~60s from the first frame, then stops
+streamcatcher play rtsp://cam/live -b opencv --record capture.mp4 --duration 60
 ```
+
+`--duration SECONDS` bounds the capture: the clock starts on the **first
+recorded frame** (not when playback opens), so it measures recorded time rather
+than time spent waiting for the stream. It works in both modes and requires
+`--record`. The default (`STREAMCATCHER_RECORD_DURATION`) is unset — an
+open-ended recording.
 
 Recording is best-effort: if the output can't be opened or a write fails,
 Streamcatcher logs a warning and keeps playing rather than aborting. The

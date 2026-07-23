@@ -41,11 +41,17 @@ def test_record_defaults(monkeypatch):
     assert settings.record_mode is RecordMode.OPENCV
     assert settings.record_fps == 25.0
     assert settings.record_fourcc == "mp4v"
+    assert settings.record_duration is None
 
 
 def test_record_mode_loaded_from_env(monkeypatch):
     monkeypatch.setenv("STREAMCATCHER_RECORD_MODE", "ffmpeg")
     assert Settings().record_mode is RecordMode.FFMPEG
+
+
+def test_record_duration_loaded_from_env(monkeypatch):
+    monkeypatch.setenv("STREAMCATCHER_RECORD_DURATION", "30")
+    assert Settings().record_duration == 30.0
 
 
 def test_api_reader_defaults_off(monkeypatch):

@@ -305,6 +305,58 @@ def test_play_help_lists_record_options():
     output = _plain(result.output)
     assert "--record" in output
     assert "--record-mode" in output
+    assert "--duration" in output
+
+
+def test_play_duration_requires_record(fake_cv2):
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--duration", "30"],
+    )
+    assert result.exit_code == 2
+    output = _plain(result.output)
+    assert "--duration" in output
+    assert "--record" in output
+
+
+def test_play_duration_must_be_positive(fake_cv2, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--record",
+            str(tmp_path / "out.mp4"),
+            "--duration",
+            "0",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--duration" in _plain(result.output)
+
+
+def test_play_record_with_duration_is_accepted(fake_cv2, tmp_path):
+    target = tmp_path / "out.mp4"
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--record",
+            str(target),
+            "--duration",
+            "5",
+            "--no-reconnect",
+        ],
+    )
+    assert result.exit_code == 0
+    writer = fake_cv2.last_video_writer
+    assert writer is not None
+    assert writer.path == str(target)
 
 
 def test_play_requires_a_url():
