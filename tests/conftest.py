@@ -15,10 +15,11 @@ import pytest
 class _FakeCapture:
     """Stand-in for ``cv2.VideoCapture`` that yields a fixed number of frames."""
 
-    def __init__(self, url: str, frames: int, opened: bool) -> None:
+    def __init__(self, url: str, frames: int, opened: bool, fps: float = 0.0) -> None:
         self.url = url
         self._frames_left = frames
         self._opened = opened
+        self._fps = fps  # what get(CAP_PROP_FPS) reports; 0 means "unknown" (live)
         self.release_calls = 0
         self.buffersize = None  # records cap.set(CAP_PROP_BUFFERSIZE, ...)
 
@@ -30,12 +31,40 @@ class _FakeCapture:
             self.buffersize = value
         return True
 
+    def get(self, prop):
+        if prop == _FakeCv2.CAP_PROP_FPS:
+            return self._fps
+        return 0.0
+
     def read(self):
         if self._frames_left > 0:
             self._frames_left -= 1
             # A tiny real array so callers can read ``frame.shape`` (360 remap).
             return True, np.zeros((8, 16, 3), dtype=np.uint8)
         return False, None
+
+    def release(self) -> None:
+        self.release_calls += 1
+        self._opened = False
+
+
+class _FakeVideoWriter:
+    """Stand-in for ``cv2.VideoWriter`` that records frames instead of encoding."""
+
+    def __init__(self, path, fourcc, fps, size, opened: bool) -> None:
+        self.path = path
+        self.fourcc = fourcc
+        self.fps = fps
+        self.size = size
+        self._opened = opened
+        self.frames_written = 0
+        self.release_calls = 0
+
+    def isOpened(self) -> bool:  # noqa: N802 - mirrors the cv2 API name
+        return self._opened
+
+    def write(self, frame) -> None:
+        self.frames_written += 1
 
     def release(self) -> None:
         self.release_calls += 1
@@ -51,6 +80,7 @@ class _FakeCv2:
     # Constants the player reads off the module.
     CAP_FFMPEG = 1900
     CAP_PROP_BUFFERSIZE = 38
+    CAP_PROP_FPS = 5
     WINDOW_NORMAL = 0
     WND_PROP_VISIBLE = 1
     INTER_LINEAR = 1
@@ -74,6 +104,9 @@ class _FakeCv2:
         # Set False to emulate opencv-python-headless: highgui raises ``cv2.error``.
         self.gui_available = True
         self.imwrite_ok = True  # scripts imwrite's success return
+        self.video_writers: list[_FakeVideoWriter] = []  # every VideoWriter opened
+        self.videowriter_ok = True  # scripts VideoWriter.isOpened() at open time
+        self.capture_fps = 0.0  # what each capture's get(CAP_PROP_FPS) reports
         self.frames = 3
         self.keys: list[int] = []  # scripted waitKey return values
         self.window_visible = 1
@@ -96,9 +129,17 @@ class _FakeCv2:
             self._open_idx += 1
         else:
             opened = self.open_ok
-        cap = _FakeCapture(url, frames=self.frames, opened=opened)
+        cap = _FakeCapture(url, frames=self.frames, opened=opened, fps=self.capture_fps)
         self.captures.append(cap)
         return cap
+
+    def VideoWriter_fourcc(self, *chars):  # noqa: N802 - mirrors the cv2 API name
+        return "".join(chars)
+
+    def VideoWriter(self, path, fourcc, fps, size):  # noqa: N802 - mirrors the cv2 API name
+        writer = _FakeVideoWriter(path, fourcc, fps, size, opened=self.videowriter_ok)
+        self.video_writers.append(writer)
+        return writer
 
     def namedWindow(self, title, flags=0):  # noqa: N802
         if not self.gui_available:
@@ -152,6 +193,10 @@ class _FakeCv2:
     @property
     def last_capture(self) -> _FakeCapture | None:
         return self.captures[-1] if self.captures else None
+
+    @property
+    def last_video_writer(self) -> _FakeVideoWriter | None:
+        return self.video_writers[-1] if self.video_writers else None
 
 
 @pytest.fixture

@@ -29,6 +29,13 @@ class Projection(StrEnum):
     EQUIRECT = "equirect"  # 360 equirectangular panorama — reprojected to a viewport
 
 
+class RecordMode(StrEnum):
+    """How ``streamcatcher play --record`` writes the stream to disk."""
+
+    OPENCV = "opencv"  # cv2.VideoWriter over the decoded frames — video only, re-encoded
+    FFMPEG = "ffmpeg"  # `ffmpeg -c copy` subprocess — lossless, keeps audio, needs the binary
+
+
 def strip_url_credentials(url: str) -> str:
     """Return ``url`` with any ``user:pass@`` userinfo removed (host/port kept)."""
     parts = urlsplit(url)
@@ -60,6 +67,16 @@ class Settings(BaseSettings):
     reconnect_base_delay: float = 1.0  # seconds before the first retry
     reconnect_backoff_factor: float = 2.0  # multiply the wait after each failure
     reconnect_max_delay: float = 30.0  # cap on the backoff wait, in seconds
+
+    # Recording (`streamcatcher play --record`). The output path is a CLI
+    # argument, not a setting; these tune how the recorder writes.
+    record_mode: RecordMode = RecordMode.OPENCV  # opencv (video only) or ffmpeg (lossless + audio)
+    record_fps: float = 25.0  # fallback frame rate when the stream doesn't report one (opencv)
+    record_fourcc: str = "mp4v"  # cv2.VideoWriter codec fourcc (opencv mode)
+    # Optional cap on recording length, in seconds. None (the default) records
+    # until playback stops (q / window close / Ctrl-C); a positive value stops
+    # the recording — and playback — that many seconds after the first frame.
+    record_duration: float | None = None
 
     # HTTP control API (`streamcatcher serve`). All optional; sensible for a
     # single-user, localhost-bound control surface.

@@ -214,6 +214,151 @@ def test_play_help_only_lists_snapshot_option():
     assert "--snapshot-dir" not in output
 
 
+def test_play_record_flag_records_while_playing(fake_cv2, tmp_path):
+    target = tmp_path / "out.mp4"
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--record",
+            str(target),
+            "--no-reconnect",
+        ],
+    )
+    assert result.exit_code == 0
+    writer = fake_cv2.last_video_writer
+    assert writer is not None
+    assert writer.path == str(target)
+    assert writer.frames_written >= 1
+    assert fake_cv2.imshow_calls >= 1  # it also played the stream in a window
+
+
+def test_play_record_without_path_defaults_to_current_directory(fake_cv2, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--record", "--no-reconnect"],
+    )
+    assert result.exit_code == 0
+    writer = fake_cv2.last_video_writer
+    assert writer is not None
+    saved = Path(writer.path)
+    assert saved.name.startswith("streamcatcher-recording-")
+    assert saved.suffix == ".mp4"
+
+
+def test_play_bare_record_before_url_defaults_and_keeps_the_url(fake_cv2, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["play", "--record", "rtsp://cam.local/stream1", "-b", "opencv", "--no-reconnect"],
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"  # URL not consumed as path
+    assert Path(fake_cv2.last_video_writer.path).name.startswith("streamcatcher-recording-")
+
+
+def test_play_record_and_snapshot_are_mutually_exclusive(fake_cv2, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--record",
+            str(tmp_path / "out.mp4"),
+            "--snapshot",
+            str(tmp_path / "shot.jpg"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--record" in _plain(result.output)
+
+
+def test_play_record_does_not_leak_credentials(fake_cv2, tmp_path, caplog):
+    with caplog.at_level(logging.INFO):
+        result = runner.invoke(
+            app,
+            [
+                "play",
+                "rtsp://alice:hunter2@cam.local/stream1",
+                "-b",
+                "opencv",
+                "--record",
+                str(tmp_path / "out.mp4"),
+                "--no-reconnect",
+            ],
+        )
+    assert result.exit_code == 0
+    combined = caplog.text + result.output
+    assert "hunter2" not in combined
+    assert "alice" not in combined
+
+
+def test_play_help_lists_record_options():
+    result = runner.invoke(app, ["play", "--help"])
+    assert result.exit_code == 0
+    output = _plain(result.output)
+    assert "--record" in output
+    assert "--record-mode" in output
+    assert "--duration" in output
+
+
+def test_play_duration_requires_record(fake_cv2):
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--duration", "30"],
+    )
+    assert result.exit_code == 2
+    output = _plain(result.output)
+    assert "--duration" in output
+    assert "--record" in output
+
+
+def test_play_duration_must_be_positive(fake_cv2, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--record",
+            str(tmp_path / "out.mp4"),
+            "--duration",
+            "0",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--duration" in _plain(result.output)
+
+
+def test_play_record_with_duration_is_accepted(fake_cv2, tmp_path):
+    target = tmp_path / "out.mp4"
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--record",
+            str(target),
+            "--duration",
+            "5",
+            "--no-reconnect",
+        ],
+    )
+    assert result.exit_code == 0
+    writer = fake_cv2.last_video_writer
+    assert writer is not None
+    assert writer.path == str(target)
+
+
 def test_play_requires_a_url():
     result = runner.invoke(app, ["play"])
     assert result.exit_code != 0

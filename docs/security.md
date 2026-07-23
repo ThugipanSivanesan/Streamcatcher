@@ -16,6 +16,10 @@ keeps that secret from leaking, and CI guards the repository.
 - The [HTTP API](http-api.md) accepts a URL on `POST /session` but **never returns
   it** in any response or error — responses expose only the opaque session id and
   the viewport state.
+- **Recording caveat:** `--record --record-mode ffmpeg` passes the URL to an
+  `ffmpeg` subprocess, so a credentialed URL is briefly visible in the machine's
+  process list (`ps`). The default `opencv` record mode does not spawn a
+  subprocess and has no such exposure — prefer it on shared hosts.
 
 ## Network posture
 

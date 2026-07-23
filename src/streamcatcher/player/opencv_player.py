@@ -20,6 +20,7 @@ import time
 from streamcatcher.config import Projection
 from streamcatcher.player.reader import FrameReader
 from streamcatcher.player.reconnect import ReconnectPolicy, backoff_delays
+from streamcatcher.player.recorder import Recorder, RecordError
 from streamcatcher.player.session import (
     SnapshotError,
     StreamOpenError,
@@ -73,9 +74,18 @@ class OpenCvPlayer:
         url: str,
         projection: Projection = Projection.FLAT,
         reconnect: ReconnectPolicy | None = None,
+        recorder: Recorder | None = None,
+        record_duration: float | None = None,
     ) -> None:
         self._session = StreamSession(url, projection)
         self._policy = reconnect or ReconnectPolicy()
+        self._recorder = recorder  # None unless --record was requested
+        self._recording = False  # the recorder has been started (lazily, on frame 1)
+        # Optional recording length cap (seconds). The deadline is a monotonic
+        # timestamp set when recording actually starts (the first frame), so the
+        # limit measures recorded time, not time spent waiting for a frame.
+        self._record_duration = record_duration
+        self._record_deadline: float | None = None
         self._window_open = False
         self._last_frame = None  # most recently rendered frame, for the 'p' snapshot
         self._last_raw = None  # raw frame behind _last_frame, to skip re-rendering it
@@ -111,13 +121,22 @@ class OpenCvPlayer:
             reader.start()
             while True:
                 raw = reader.latest()
-                # Re-render only when there's a new frame or the viewport moved,
-                # so an idle view doesn't re-run the (costly) 360 remap each tick.
-                if raw is not None and (raw is not self._last_raw or self._view_dirty):
-                    self._last_frame = self._session.render(raw)
-                    cv2.imshow(_WINDOW_TITLE, self._last_frame)
-                    self._last_raw = raw
-                    self._view_dirty = False
+                if raw is not None:
+                    new_frame = raw is not self._last_raw
+                    # Re-render only when there's a new frame or the viewport moved,
+                    # so an idle view doesn't re-run the (costly) 360 remap each tick.
+                    if new_frame or self._view_dirty:
+                        self._last_frame = self._session.render(raw)
+                        cv2.imshow(_WINDOW_TITLE, self._last_frame)
+                        self._view_dirty = False
+                    if new_frame:
+                        # Record the raw frame (the full panorama in 360), not the
+                        # rendered viewport, so a recording doesn't follow the look.
+                        self._record(raw)
+                        self._last_raw = raw
+                if self._record_duration_reached():
+                    log.info("Reached the recording duration limit — stopping.")
+                    break
                 key = cv2.waitKey(_WAITKEY_MS) & 0xFF
                 if key == ord("q"):
                     break
@@ -138,6 +157,7 @@ class OpenCvPlayer:
         finally:
             if reader is not None:
                 reader.stop()
+            self._stop_recording()
             self.stop()
 
     def _reconnect(self, cv2) -> bool:
@@ -229,6 +249,46 @@ class OpenCvPlayer:
             _load_cv2().destroyWindow(_WINDOW_TITLE)
             self._window_open = False
         log.info("Live player: stopped.")
+
+    def _record(self, raw) -> None:
+        """Feed one raw frame to the recorder, starting it lazily on the first frame.
+
+        Recording is best-effort: if the writer can't be opened or a write fails,
+        log a warning and drop the recorder so playback keeps going.
+        """
+        if self._recorder is None:
+            return
+        try:
+            if not self._recording:
+                self._recorder.start(raw, self._session.capture_fps())
+                self._recording = True
+                if self._record_duration is not None:
+                    self._record_deadline = time.monotonic() + self._record_duration
+                    log.info("Recording for up to %.0fs.", self._record_duration)
+            self._recorder.write(raw)
+        except RecordError as exc:
+            log.warning("Recording stopped: %s", exc)
+            self._stop_recording()
+            self._recorder = None
+
+    def _record_duration_reached(self) -> bool:
+        """Whether recording has run for its configured ``--duration`` limit.
+
+        Always ``False`` until recording starts and when no duration was set, so
+        this is a no-op for open-ended recordings and for plain playback.
+        """
+        return self._record_deadline is not None and time.monotonic() >= self._record_deadline
+
+    def _stop_recording(self) -> None:
+        """Finalize the recording, if any (safe to call more than once)."""
+        if self._recorder is None:
+            return
+        try:
+            self._recorder.stop()
+        except Exception as exc:  # finalizing must never crash the shutdown path
+            log.warning("Could not finalize the recording cleanly: %s", exc)
+        finally:
+            self._recording = False
 
     def _save_snapshot(self) -> None:
         """Write the frame currently on screen to a timestamped file (the 'p' key)."""
