@@ -19,6 +19,7 @@ class StubPlayer:
         self._url = url  # held for parity with live backends; never logged
         self._playing = False
         self.last_snapshot: str | None = None
+        self.last_orientations: str | None = None
 
     def play(self) -> None:
         self._playing = True
@@ -31,6 +32,10 @@ class StubPlayer:
     def snapshot(self, path: str) -> None:
         self.last_snapshot = path
         log.info("Stub player: snapshot requested at %s (no-op).", path)
+
+    def save_orientations(self, out_dir: str) -> None:
+        self.last_orientations = out_dir
+        log.info("Stub player: orientation split requested at %s (no-op).", out_dir)
 
     def is_playing(self) -> bool:
         return self._playing

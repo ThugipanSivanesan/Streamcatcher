@@ -18,6 +18,7 @@ import logging
 import time
 
 from streamcatcher.config import Projection
+from streamcatcher.player.orientations import DEFAULT_HFOV_DEG, DEFAULT_SIZE, OrientationError
 from streamcatcher.player.reader import FrameReader
 from streamcatcher.player.reconnect import ReconnectPolicy, backoff_delays
 from streamcatcher.player.recorder import Recorder, RecordError
@@ -28,7 +29,7 @@ from streamcatcher.player.session import (
     _load_cv2,
 )
 
-__all__ = ["OpenCvPlayer", "SnapshotError", "StreamOpenError"]
+__all__ = ["OpenCvPlayer", "OrientationError", "SnapshotError", "StreamOpenError"]
 
 log = logging.getLogger("streamcatcher.player.opencv")
 
@@ -76,6 +77,8 @@ class OpenCvPlayer:
         reconnect: ReconnectPolicy | None = None,
         recorder: Recorder | None = None,
         record_duration: float | None = None,
+        orientation_size: int = DEFAULT_SIZE,
+        orientation_hfov_deg: float = DEFAULT_HFOV_DEG,
     ) -> None:
         self._session = StreamSession(url, projection)
         self._policy = reconnect or ReconnectPolicy()
@@ -86,6 +89,8 @@ class OpenCvPlayer:
         # limit measures recorded time, not time spent waiting for a frame.
         self._record_duration = record_duration
         self._record_deadline: float | None = None
+        self._orientation_size = orientation_size
+        self._orientation_hfov_deg = orientation_hfov_deg
         self._window_open = False
         self._last_frame = None  # most recently rendered frame, for the 'p' snapshot
         self._last_raw = None  # raw frame behind _last_frame, to skip re-rendering it
@@ -317,6 +322,29 @@ class OpenCvPlayer:
         try:
             self._session.snapshot(path)
             log.info("Snapshot saved to %s", path)
+        finally:
+            if opened_here:
+                self._session.close()
+
+    def save_orientations(self, out_dir: str) -> None:
+        """Split one 360 frame into four cardinal views and save them (no window).
+
+        Opens the stream if needed, grabs one raw equirectangular frame, splits
+        it into front/right/back/left images, writes them into ``out_dir`` as
+        ``front.jpg``/``right.jpg``/``back.jpg``/``left.jpg``, then leaves the
+        capture as it found it. Raises :class:`StreamOpenError` if the stream
+        won't open or :class:`OrientationError` if no frame arrives or a file
+        can't be written.
+        """
+        opened_here = not self._session.is_open()
+        if opened_here:
+            self._session.open()
+        try:
+            views = self._session.split_orientations(
+                size=self._orientation_size, hfov_deg=self._orientation_hfov_deg
+            )
+            paths = self._session.write_orientations(views, out_dir)
+            log.info("Saved %d orientation views to %s", len(paths), out_dir)
         finally:
             if opened_here:
                 self._session.close()

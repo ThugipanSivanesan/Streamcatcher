@@ -21,6 +21,10 @@ class Player(Protocol):
         """Save a single still frame to ``path``."""
         ...
 
+    def save_orientations(self, out_dir: str) -> None:
+        """Split a 360 frame into four cardinal views saved under ``out_dir``."""
+        ...
+
     def is_playing(self) -> bool:
         """Whether playback is currently active."""
         ...

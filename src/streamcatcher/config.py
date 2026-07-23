@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     # the recording — and playback — that many seconds after the first frame.
     record_duration: float | None = None
 
+    # Four-orientation split (`streamcatcher play --orientations`). Splits a 360
+    # equirectangular frame into front/right/back/left flat views.
+    orientation_size: int = 1024  # side length, in pixels, of each square view
+    orientation_hfov_deg: float = 90.0  # horizontal FOV per view; 90 tiles the horizon
+
     # HTTP control API (`streamcatcher serve`). All optional; sensible for a
     # single-user, localhost-bound control surface.
     api_token: SecretStr | None = None  # when set, require this bearer token on every route

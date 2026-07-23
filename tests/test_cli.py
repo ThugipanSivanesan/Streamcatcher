@@ -359,6 +359,91 @@ def test_play_record_with_duration_is_accepted(fake_cv2, tmp_path):
     assert writer.path == str(target)
 
 
+def test_play_orientations_writes_four_views_without_a_window(fake_cv2, tmp_path):
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--orientations", str(tmp_path)],
+        env={"STREAMCATCHER_ORIENTATION_SIZE": "32"},
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.imwrite_calls == 4  # front/right/back/left
+    names = sorted(Path(path).name for path, _ in fake_cv2.written)
+    assert names == ["back.jpg", "front.jpg", "left.jpg", "right.jpg"]
+    assert fake_cv2.imshow_calls == 0  # no playback window
+
+
+def test_play_orientations_without_dir_defaults_to_timestamped_folder(
+    fake_cv2, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "opencv", "--orientations"],
+        env={"STREAMCATCHER_ORIENTATION_SIZE": "32"},
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.imwrite_calls == 4
+    out_dir = Path(fake_cv2.written[0][0]).resolve().parent
+    assert out_dir.name.startswith("streamcatcher-orientations-")
+    assert out_dir.parent == tmp_path.resolve()
+
+
+def test_play_bare_orientations_before_url_defaults_and_keeps_the_url(
+    fake_cv2, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["play", "--orientations", "rtsp://cam.local/stream1", "-b", "opencv"],
+        env={"STREAMCATCHER_ORIENTATION_SIZE": "32"},
+    )
+    assert result.exit_code == 0
+    assert fake_cv2.last_capture.url == "rtsp://cam.local/stream1"  # URL not consumed as the dir
+    assert fake_cv2.imwrite_calls == 4
+
+
+def test_play_orientations_and_snapshot_are_mutually_exclusive(fake_cv2, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--orientations",
+            str(tmp_path),
+            "--snapshot",
+            str(tmp_path / "shot.jpg"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--orientations" in _plain(result.output)
+
+
+def test_play_orientations_and_record_are_mutually_exclusive(fake_cv2, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "play",
+            "rtsp://cam.local/stream1",
+            "-b",
+            "opencv",
+            "--orientations",
+            str(tmp_path),
+            "--record",
+            str(tmp_path / "out.mp4"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--orientations" in _plain(result.output) or "--record" in _plain(result.output)
+
+
+def test_play_help_lists_orientations_option():
+    result = runner.invoke(app, ["play", "--help"])
+    assert result.exit_code == 0
+    assert "--orientations" in _plain(result.output)
+
+
 def test_play_requires_a_url():
     result = runner.invoke(app, ["play"])
     assert result.exit_code != 0
