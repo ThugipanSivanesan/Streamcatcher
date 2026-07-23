@@ -1,4 +1,4 @@
-from streamcatcher.config import Backend, Settings, strip_url_credentials
+from streamcatcher.config import Backend, RecordMode, Settings, strip_url_credentials
 
 
 def test_stream_url_defaults_to_none(monkeypatch):
@@ -28,6 +28,24 @@ def test_secret_values_empty_when_url_has_no_credentials():
 
 def test_backend_defaults_to_stub():
     assert Settings().backend is Backend.STUB
+
+
+def test_record_defaults(monkeypatch):
+    for var in (
+        "STREAMCATCHER_RECORD_MODE",
+        "STREAMCATCHER_RECORD_FPS",
+        "STREAMCATCHER_RECORD_FOURCC",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    settings = Settings()
+    assert settings.record_mode is RecordMode.OPENCV
+    assert settings.record_fps == 25.0
+    assert settings.record_fourcc == "mp4v"
+
+
+def test_record_mode_loaded_from_env(monkeypatch):
+    monkeypatch.setenv("STREAMCATCHER_RECORD_MODE", "ffmpeg")
+    assert Settings().record_mode is RecordMode.FFMPEG
 
 
 def test_api_reader_defaults_off(monkeypatch):

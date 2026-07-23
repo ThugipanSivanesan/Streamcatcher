@@ -462,3 +462,134 @@ def test_factory_builds_reconnect_policy_from_settings(fake_cv2):
     assert player._policy == ReconnectPolicy(
         enabled=False, base_delay=2.5, factor=3.0, max_delay=45.0
     )
+
+
+# --- recording -------------------------------------------------------------
+#
+# Player-level tests inject a fake recorder to pin the lifecycle (start once on
+# the first frame, write per new frame, stop on the way out) without touching a
+# real encoder or ffmpeg. The recorder backends themselves are unit-tested in
+# tests/test_recorder.py.
+
+
+class _FakeRecorder:
+    """Records how the player drove it: start/write/stop with a failure knob."""
+
+    def __init__(self, fail_on=None):
+        self.started_with = None  # (sample_frame, fps) on start
+        self.writes = 0
+        self.stops = 0
+        self._recording = False
+        self._fail_on = fail_on  # "start" or "write" to raise RecordError there
+
+    @property
+    def output(self):
+        return "recording.mp4"
+
+    def is_recording(self):
+        return self._recording
+
+    def start(self, sample_frame, fps):
+        from streamcatcher.player.recorder import RecordError
+
+        if self._fail_on == "start":
+            raise RecordError("writer would not open")
+        self.started_with = (sample_frame, fps)
+        self._recording = True
+
+    def write(self, frame):
+        from streamcatcher.player.recorder import RecordError
+
+        if self._fail_on == "write":
+            raise RecordError("disk full")
+        self.writes += 1
+
+    def stop(self):
+        self.stops += 1
+        self._recording = False
+
+
+def test_opencv_player_records_frames_and_finalizes(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.capture_fps = 24.0
+    recorder = _FakeRecorder()
+    OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY, recorder=recorder).play()
+
+    assert recorder.started_with is not None
+    assert recorder.started_with[1] == 24.0  # fps from the capture was passed through
+    assert recorder.writes >= 1  # at least one frame recorded
+    assert recorder.stops == 1  # finalized in the finally block
+
+
+def test_opencv_player_stops_recorder_on_quit(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    fake_cv2.keys = [ord("q")]
+    recorder = _FakeRecorder()
+    OpenCvPlayer("rtsp://cam/stream", recorder=recorder).play()
+
+    assert recorder.stops == 1  # finalized even when the user quits early
+
+
+def test_opencv_player_without_recorder_does_not_record(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    # No recorder passed: play() must run exactly as before, opening no writer.
+    OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY).play()
+
+    assert fake_cv2.video_writers == []
+
+
+def test_opencv_player_warns_and_keeps_playing_on_record_start_failure(fake_cv2, caplog):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    recorder = _FakeRecorder(fail_on="start")
+    with caplog.at_level(logging.WARNING):
+        OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY, recorder=recorder).play()
+
+    assert "Recording stopped" in caplog.text
+    assert fake_cv2.imshow_calls >= 1  # playback continued past the failure
+
+
+def test_opencv_player_end_to_end_recording_writes_to_writer(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+    from streamcatcher.player.recorder import OpenCvRecorder
+
+    recorder = OpenCvRecorder("out.mp4", fps_fallback=25.0)
+    OpenCvPlayer("rtsp://cam/stream", reconnect=_NO_RETRY, recorder=recorder).play()
+
+    writer = fake_cv2.last_video_writer
+    assert writer is not None
+    assert writer.path == "out.mp4"
+    assert writer.frames_written >= 1
+    assert writer.release_calls == 1  # finalized on the way out
+
+
+def test_factory_builds_opencv_recorder_when_record_path_given(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+    from streamcatcher.player.recorder import OpenCvRecorder
+
+    settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.OPENCV)
+    player = get_player(settings, record_path="out.mp4")
+    assert isinstance(player, OpenCvPlayer)
+    assert isinstance(player._recorder, OpenCvRecorder)
+
+
+def test_factory_builds_ffmpeg_recorder_from_settings(fake_cv2):
+    from streamcatcher.config import RecordMode
+    from streamcatcher.player.recorder import FfmpegRecorder
+
+    settings = Settings(
+        stream_url="rtsp://cam/stream",
+        backend=Backend.OPENCV,
+        record_mode=RecordMode.FFMPEG,
+    )
+    player = get_player(settings, record_path="out.mp4")
+    assert isinstance(player._recorder, FfmpegRecorder)
+
+
+def test_factory_rejects_recording_on_stub_backend():
+    settings = Settings(stream_url="rtsp://cam/stream", backend=Backend.STUB)
+    with pytest.raises(ValueError, match="opencv"):
+        get_player(settings, record_path="out.mp4")

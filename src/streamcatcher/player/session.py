@@ -156,6 +156,17 @@ class StreamSession:
         """Whether a stream capture is currently open."""
         return self._cap is not None and self._cap.isOpened()
 
+    def capture_fps(self) -> float | None:
+        """The capture's reported frame rate, or ``None`` when it doesn't report one.
+
+        Live streams often report ``0`` here, so callers should treat ``None`` as
+        "unknown" and fall back to a default.
+        """
+        if self._cap is None:
+            return None
+        fps = self._cap.get(self._cv2.CAP_PROP_FPS)
+        return fps if fps and fps > 0 else None
+
     # -- frames ---------------------------------------------------------------
 
     def read_frame(self):

@@ -25,6 +25,12 @@ streamcatcher play rtsp://camera.local/live -b opencv --snapshot
 
 # Or choose the exact output path
 streamcatcher play rtsp://camera.local/live -b opencv --snapshot shot.jpg
+
+# Record the stream to a file while you watch it
+streamcatcher play rtsp://camera.local/live -b opencv --record capture.mp4
+
+# Record losslessly with audio (needs the ffmpeg binary on PATH)
+streamcatcher play rtsp://camera.local/live -b opencv --record capture.mp4 --record-mode ffmpeg
 ```
 
 ### In the viewer window
@@ -46,6 +52,8 @@ Closing the window also quits.
 | `--backend` / `-b` | `opencv` (live window), `stub` (offline, default) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
 | `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
+| `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` | — |
+| `--record-mode` | `opencv` (default), `ffmpeg` | `STREAMCATCHER_RECORD_MODE` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 Configuration-backed flags use environment-variable defaults with the
@@ -84,6 +92,41 @@ Two ways to grab a still:
 ```console
 streamcatcher play rtsp://cam/live -b opencv -p equirect --snapshot view.jpg
 ```
+
+## Recording
+
+Record a live stream to a file while you watch it with `--record`. Like
+`--snapshot`, the path is optional — bare `--record` writes a timestamped
+`streamcatcher-recording-YYYYMMDD-HHMMSS.mp4` in the current directory; missing
+parent directories are created. `--record` and `--snapshot` can't be combined
+(snapshot captures one frame and exits). The recording is finalized when you
+quit (`q` / close the window / `Ctrl-C`).
+
+Two modes, chosen with `--record-mode`:
+
+| Mode | Output | Audio | Needs | Notes |
+|---|---|---|---|---|
+| `opencv` (default) | re-encoded video | ❌ no | nothing extra | Records the raw decoded frame — in 360 that's the **full equirectangular panorama**, not the look-around viewport, so a recording never follows where you're looking. If the stream resolution changes (e.g. after a reconnect) it rolls to a new numbered segment (`capture-002.mp4`, …). |
+| `ffmpeg` | lossless copy | ✅ yes | the `ffmpeg` binary on `PATH` | Copies the original stream with `ffmpeg -c copy` on its own connection — no re-encode, keeps audio. Records the raw stream (not the reprojected viewport). |
+
+```console
+# Default opencv mode — video only, no extra dependency
+streamcatcher play rtsp://cam/live -b opencv --record capture.mp4
+
+# ffmpeg mode — lossless, with audio (install ffmpeg first)
+streamcatcher play rtsp://cam/live -b opencv --record capture.mp4 --record-mode ffmpeg
+```
+
+Recording is best-effort: if the output can't be opened or a write fails,
+Streamcatcher logs a warning and keeps playing rather than aborting. The
+`opencv` codec (`STREAMCATCHER_RECORD_FOURCC`, default `mp4v`) and the fallback
+frame rate used when the stream doesn't report one (`STREAMCATCHER_RECORD_FPS`,
+default `25`) are configurable.
+
+!!! note "ffmpeg mode and credentials"
+    In `ffmpeg` mode the stream URL is passed to the `ffmpeg` subprocess, so a
+    URL with embedded credentials is briefly visible in the machine's process
+    list (`ps`). Prefer `opencv` mode on shared hosts. See [Security](security.md).
 
 ## Auto-reconnect
 

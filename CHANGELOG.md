@@ -8,6 +8,18 @@ The project is pre-1.0 and built in small, tested vertical slices.
 
 ## [Unreleased]
 
+### Added
+
+- **Recording** — `streamcatcher play --record [PATH]` records a live stream to a
+  file while you watch it (bare `--record` writes a timestamped `.mp4` in the
+  current directory). Two selectable backends via `--record-mode`: `opencv`
+  (default; re-encodes the decoded frames, video only, no extra dependency) and
+  `ffmpeg` (`ffmpeg -c copy` — lossless and keeps audio, needs the `ffmpeg`
+  binary). In 360 the `opencv` recorder captures the full equirectangular
+  panorama, and rolls to a new numbered segment if the stream resolution changes.
+  `--record` and `--snapshot` are mutually exclusive. New `STREAMCATCHER_RECORD_*`
+  settings tune the mode, fallback fps, and codec.
+
 ## [0.2.0] - 2026-07-21
 
 ### Added
