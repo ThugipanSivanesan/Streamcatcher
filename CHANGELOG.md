@@ -17,12 +17,20 @@ The project is pre-1.0 and built in small, tested vertical slices.
   `ffmpeg` (`ffmpeg -c copy` — lossless and keeps audio, needs the `ffmpeg`
   binary). In 360 the `opencv` recorder captures the full equirectangular
   panorama, and rolls to a new numbered segment if the stream resolution changes.
-  `--record` and `--snapshot` are mutually exclusive. New `STREAMCATCHER_RECORD_*`
-  settings tune the mode, fallback fps, and codec.
+  `--record` is mutually exclusive with `--snapshot` and `--orientations`. New
+  `STREAMCATCHER_RECORD_*` settings tune the mode, fallback fps, and codec.
 - **Timed recording** — `--duration SECONDS` (env `STREAMCATCHER_RECORD_DURATION`)
   caps a recording: playback and recording stop automatically that many seconds
   after the first recorded frame. Works in both record modes and requires
   `--record`; without it a recording runs open-ended until you quit.
+- **Four-orientation split** — `streamcatcher play --orientations [DIR]` takes one
+  frame from a 360 equirectangular stream and reprojects it into four flat views —
+  front, right, back, left — writing `front.jpg`/`right.jpg`/`back.jpg`/`left.jpg`
+  and exiting without a window (works headless). Bare `--orientations` writes into a
+  timestamped folder; mutually exclusive with `--snapshot` and `--record`. View size
+  and field of view are tunable via `STREAMCATCHER_ORIENTATION_SIZE` /
+  `STREAMCATCHER_ORIENTATION_HFOV_DEG`. Reuses the existing equirect reprojection;
+  an interactive explainer lives at `docs/orientation-split.html`.
 
 ## [0.2.0] - 2026-07-21
 

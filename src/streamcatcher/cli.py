@@ -32,14 +32,20 @@ def _default_record_path() -> str:
     return f"streamcatcher-recording-{time.strftime('%Y%m%d-%H%M%S')}.mp4"
 
 
-# Options that take an optional output path: bare use falls back to a timestamped
-# default. Both write a local file, never a stream URL.
+def _default_orientations_dir() -> str:
+    """A timestamped directory name for a four-orientation split."""
+    return f"streamcatcher-orientations-{time.strftime('%Y%m%d-%H%M%S')}"
+
+
+# Options that take an optional output path/dir: bare use falls back to a
+# timestamped default. Each writes to a local path, never a stream URL.
 _OPTIONAL_PATH_DEFAULTS = {
     "--snapshot": _default_snapshot_path,
     "--record": _default_record_path,
+    "--orientations": _default_orientations_dir,
 }
 
-# Schemes a stream URL uses. An output path is always a local file, never a
+# Schemes a stream URL uses. An output path is always a local path, never a
 # stream URL, so a token with one of these schemes right after a bare optional
 # option is the URL argument, not that option's path (see below).
 _STREAM_URL_SCHEMES = ("rtsp://", "rtmp://")
@@ -51,7 +57,7 @@ def _looks_like_stream_url(token: str) -> bool:
 
 
 class _OptionalPathCommand(TyperCommand):
-    """Let ``--snapshot``/``--record`` be used with a path or as bare flags.
+    """Let ``--snapshot``/``--record``/``--orientations`` take a path or be bare flags.
 
     Typer string options normally require a value. Normalize a bare option to
     an attached default before Click parses it, while leaving ``--opt PATH`` and
@@ -59,7 +65,7 @@ class _OptionalPathCommand(TyperCommand):
 
     An option is treated as bare when it is the last token, when the next token
     is another option (``-``…), or when the next token is the stream URL itself —
-    so ``play --record rtsp://cam/stream`` (option before the URL) records to the
+    so e.g. ``play --record rtsp://cam/stream`` (option before the URL) uses the
     default path instead of swallowing the URL as the path.
     """
 
@@ -124,7 +130,7 @@ def play(
         metavar="[PATH]",
         help="Record the stream to a file while playing. With no PATH, save a "
         "timestamped .mp4 in the current directory; otherwise save to PATH. "
-        "See --record-mode. Mutually exclusive with --snapshot.",
+        "See --record-mode. Mutually exclusive with --snapshot and --orientations.",
     ),
     record_mode: RecordMode | None = typer.Option(
         None,
@@ -141,11 +147,30 @@ def play(
         "frame. Requires --record; without it a recording runs until you quit. "
         "Defaults to STREAMCATCHER_RECORD_DURATION.",
     ),
+    orientations: str | None = typer.Option(
+        None,
+        "--orientations",
+        metavar="[DIR]",
+        help="Split one 360 frame into four flat views (front/right/back/left) "
+        "and exit without a window. With no DIR, save into a timestamped folder "
+        "in the current directory; otherwise into DIR. Treats the source as a "
+        "360 equirectangular panorama. Mutually exclusive with --snapshot and --record.",
+    ),
 ) -> None:
-    """Connect to URL and play the stream (optionally recording, or one --snapshot)."""
+    """Connect to URL and play, record, snapshot one frame, or split four orientations."""
     if snapshot is not None and record is not None:
         raise typer.BadParameter(
             "--snapshot captures a single frame and exits, so it can't be combined "
+            "with --record. Use one or the other."
+        )
+    if snapshot is not None and orientations is not None:
+        raise typer.BadParameter(
+            "--snapshot and --orientations each capture and exit, so they can't be "
+            "combined. Use one or the other."
+        )
+    if record is not None and orientations is not None:
+        raise typer.BadParameter(
+            "--orientations captures four views and exits, so it can't be combined "
             "with --record. Use one or the other."
         )
     if duration is not None:
@@ -182,6 +207,8 @@ def play(
     player = get_player(settings, record_path=record)
     if snapshot is not None:
         player.snapshot(snapshot)
+    elif orientations is not None:
+        player.save_orientations(orientations)
     else:
         player.play()
     log.info("Backend: %s", settings.backend.value)

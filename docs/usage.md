@@ -55,9 +55,10 @@ Closing the window also quits.
 | `--backend` / `-b` | `opencv` (live window), `stub` (offline, default) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
 | `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
-| `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` | — |
+| `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` and `--orientations` | — |
 | `--record-mode` | `opencv` (default), `ffmpeg` | `STREAMCATCHER_RECORD_MODE` |
 | `--duration` | `SECONDS` — stop recording and playback this long after the first frame; requires `--record` | `STREAMCATCHER_RECORD_DURATION` |
+| `--orientations` | optional `DIR` — split one 360 frame into four flat views and exit; defaults to a timestamped folder. Mutually exclusive with `--snapshot` and `--record` | `STREAMCATCHER_ORIENTATION_SIZE`, `STREAMCATCHER_ORIENTATION_HFOV_DEG` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 Configuration-backed flags use environment-variable defaults with the
@@ -102,8 +103,8 @@ streamcatcher play rtsp://cam/live -b opencv -p equirect --snapshot view.jpg
 Record a live stream to a file while you watch it with `--record`. Like
 `--snapshot`, the path is optional — bare `--record` writes a timestamped
 `streamcatcher-recording-YYYYMMDD-HHMMSS.mp4` in the current directory; missing
-parent directories are created. `--record` and `--snapshot` can't be combined
-(snapshot captures one frame and exits). By default there is **no time limit** —
+parent directories are created. `--record` can't be combined with `--snapshot` or
+`--orientations` (those capture and exit). By default there is **no time limit** —
 the recording runs until you quit (`q` / close the window / `Ctrl-C`), or, if
 `--no-reconnect` is set, until the stream ends. Pass `--duration SECONDS` to cap
 it: recording (and playback) stop automatically that many seconds after the
@@ -143,6 +144,32 @@ default `25`) are configurable.
     In `ffmpeg` mode the stream URL is passed to the `ffmpeg` subprocess, so a
     URL with embedded credentials is briefly visible in the machine's process
     list (`ps`). Prefer `opencv` mode on shared hosts. See [Security](security.md).
+
+## Four-orientation split
+
+`--orientations` takes a single frame from a **360° equirectangular** stream and
+reprojects it into four flat, undistorted views — **front, right, back, left** —
+then exits without opening a window (so it works on a headless OpenCV build too).
+With the default 90° field of view the four views tile the whole horizon.
+
+```console
+# Write front.jpg / right.jpg / back.jpg / left.jpg into ./views/
+streamcatcher play rtsp://cam/live -b opencv --orientations ./views
+
+# No DIR → a timestamped streamcatcher-orientations-YYYYMMDD-HHMMSS/ folder
+streamcatcher play rtsp://cam/live -b opencv --orientations
+```
+
+The source is always treated as a full 360°×180° panorama regardless of
+`--projection`. Tune the output with environment variables:
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `STREAMCATCHER_ORIENTATION_SIZE` | `1024` | Side length, in pixels, of each square view |
+| `STREAMCATCHER_ORIENTATION_HFOV_DEG` | `90.0` | Horizontal field of view per view (90° tiles the horizon) |
+
+An interactive explainer for how the split works lives in
+[`docs/orientation-split.html`](orientation-split.html).
 
 ## Auto-reconnect
 

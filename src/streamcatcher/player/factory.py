@@ -50,6 +50,8 @@ def get_player(settings: Settings, record_path: str | None = None) -> Player:
             reconnect=policy,
             recorder=recorder,
             record_duration=settings.record_duration if record_path is not None else None,
+            orientation_size=settings.orientation_size,
+            orientation_hfov_deg=settings.orientation_hfov_deg,
         )
 
     raise NotImplementedError(  # pragma: no cover - defensive: Backend is exhaustive

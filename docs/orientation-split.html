@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streamcatcher — 360° → four orientations</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1b1f24; --muted: #5b6672; --card: #f5f7fa;
+    --border: #e2e8f0; --accent: #2563eb;
+    --front: #e5484d; --right: #30a46c; --back: #3b82f6; --left: #f5a524;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --fg: #e6edf3; --muted: #9aa7b4; --card: #161b22;
+      --border: #2a313c; --accent: #4f8cff;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --fg: #1b1f24; --muted: #5b6672; --card: #f5f7fa; --border: #e2e8f0;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1116; --fg: #e6edf3; --muted: #9aa7b4; --card: #161b22; --border: #2a313c; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 6px; }
+  h2 { font-size: 1.25rem; margin: 40px 0 12px; }
+  .lede { color: var(--muted); font-size: 1.05rem; margin: 0 0 8px; }
+  p { margin: 0 0 14px; }
+  code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+  code { background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+  pre {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; margin: 0 0 14px;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 18px 26px; align-items: center; margin-bottom: 18px; }
+  .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+  .controls input[type="range"] { width: 170px; }
+  .controls .val { color: var(--fg); font-variant-numeric: tabular-nums; }
+  button, .filebtn {
+    font: inherit; font-size: 0.9rem; cursor: pointer; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px;
+  }
+  button:hover, .filebtn:hover { border-color: var(--accent); }
+  .filebtn input { display: none; }
+  .source-wrap { position: relative; margin: 0 0 8px; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 8px; background: #000; }
+  .source-cap { color: var(--muted); font-size: 0.82rem; margin: 4px 0 0; }
+  .views { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 8px; }
+  @media (max-width: 620px) { .views { grid-template-columns: repeat(2, 1fr); } }
+  .view h3 {
+    margin: 0 0 6px; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .view.front .swatch { background: var(--front); } .view.right .swatch { background: var(--right); }
+  .view.back  .swatch { background: var(--back);  } .view.left  .swatch { background: var(--left);  }
+  .view .yaw { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .note { border-left: 3px solid var(--accent); padding: 10px 14px; background: var(--card); border-radius: 0 8px 8px 0; }
+  a { color: var(--accent); }
+  .foot { color: var(--muted); font-size: 0.85rem; margin-top: 48px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>360° → four orientations</h1>
+  <p class="lede">Splitting one equirectangular frame into flat <strong>front / right / back / left</strong> views.</p>
+  <p>
+    Streamcatcher already aims a virtual pinhole camera into a 360° equirectangular
+    panorama for its interactive look-around viewport. This tool reuses exactly that
+    reprojection, but instead of one steerable view it renders <strong>four fixed
+    headings at once</strong> — yaw 0°, 90°, 180° and −90° — so a single spherical
+    frame becomes four ordinary flat images. With a 90° field of view the four views
+    tile the whole horizon edge-to-edge, with no overlap and no gap.
+  </p>
+
+  <div class="note">
+    <strong>Live demo below.</strong> Everything runs in your browser with a
+    JavaScript port of the same math (<code>reprojection.py</code>). It starts with a
+    synthetic labelled panorama; load your own equirectangular (2:1) image to try a
+    real one. Nothing is uploaded.
+  </div>
+
+  <h2>Try it</h2>
+  <div class="card">
+    <div class="controls">
+      <label class="filebtn">Load a 360° image
+        <input type="file" id="file" accept="image/*">
+      </label>
+      <button id="reset" type="button">Use synthetic panorama</button>
+      <label>Horizontal FOV <span class="val" id="hfovVal">90°</span>
+        <input type="range" id="hfov" min="50" max="120" step="1" value="90">
+      </label>
+      <label>Pitch <span class="val" id="pitchVal">0°</span>
+        <input type="range" id="pitch" min="-45" max="45" step="1" value="0">
+      </label>
+    </div>
+
+    <div class="source-wrap">
+      <canvas id="source" width="1024" height="512"></canvas>
+    </div>
+    <p class="source-cap">
+      Source equirectangular frame. The coloured wedges mark where each view is aimed:
+      the centre column is <strong>front</strong> (0°), and longitude increases to the right.
+    </p>
+
+    <div class="views">
+      <div class="view front"><h3><span class="swatch"></span>Front<span class="yaw">yaw 0°</span></h3><canvas id="v-front" width="320" height="320"></canvas></div>
+      <div class="view right"><h3><span class="swatch"></span>Right<span class="yaw">yaw 90°</span></h3><canvas id="v-right" width="320" height="320"></canvas></div>
+      <div class="view back"><h3><span class="swatch"></span>Back<span class="yaw">yaw 180°</span></h3><canvas id="v-back" width="320" height="320"></canvas></div>
+      <div class="view left"><h3><span class="swatch"></span>Left<span class="yaw">yaw −90°</span></h3><canvas id="v-left" width="320" height="320"></canvas></div>
+    </div>
+  </div>
+
+  <h2>How the mapping works</h2>
+  <p>
+    For each output pixel the virtual camera casts a ray, rotates it by the view's yaw
+    (and pitch), converts it to a longitude/latitude on the sphere, and reads the
+    matching pixel of the equirectangular source:
+  </p>
+  <pre><code>focal = (size/2) / tan(hfov/2)
+ray   = rotate_yaw( (u−cx, −(v−cy), focal), yaw )
+lon   = atan2(ray.x, ray.z)          # 0 = front, + = right
+lat   = atan2(ray.y, hypot(ray.x, ray.z))
+src_x = (lon / 2π + 0.5) · width
+src_y = (0.5 − lat / π) · height</code></pre>
+  <p>
+    At the centre pixel this puts <strong>front</strong> at the middle column of the
+    panorama, <strong>right</strong> three-quarters across, <strong>left</strong> a
+    quarter across, and <strong>back</strong> at the wrap-around seam — which is exactly
+    what the four views show above.
+  </p>
+
+  <h2>In Streamcatcher</h2>
+  <p>
+    The split ships as a one-shot capture on <code>play</code>: it opens the stream,
+    grabs one raw frame, writes the four views, and exits — <strong>no window</strong>,
+    so it also runs on a headless (server) OpenCV build. It is mutually exclusive with
+    <code>--snapshot</code>.
+  </p>
+  <pre><code># Write front.jpg / right.jpg / back.jpg / left.jpg into ./views/
+streamcatcher play rtsp://cam.local/live -b opencv --orientations ./views
+
+# No directory → a timestamped folder in the current directory
+streamcatcher play rtsp://cam.local/live -b opencv --orientations</code></pre>
+  <p>Output files, size, and field of view:</p>
+  <table>
+    <thead><tr><th>What</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Files written</td><td><code>front.jpg</code>, <code>right.jpg</code>, <code>back.jpg</code>, <code>left.jpg</code></td></tr>
+      <tr><td>View size</td><td><code>1024×1024</code> · env <code>STREAMCATCHER_ORIENTATION_SIZE</code></td></tr>
+      <tr><td>Horizontal FOV</td><td><code>90°</code> · env <code>STREAMCATCHER_ORIENTATION_HFOV_DEG</code></td></tr>
+      <tr><td>Headings</td><td>front 0° · right 90° · back 180° · left −90°</td></tr>
+    </tbody>
+  </table>
+  <p>The same operation is available programmatically on the headless session:</p>
+  <pre><code>from streamcatcher.player.session import StreamSession
+
+session = StreamSession("rtsp://cam.local/live")
+session.open()
+views = session.split_orientations()          # {"front","right","back","left"} → images
+session.write_orientations(views, "views")    # front.jpg / right.jpg / back.jpg / left.jpg
+session.close()
+
+# Or split a frame you already have (cv2 injected — no hard OpenCV import):
+from streamcatcher.player.orientations import split_equirect
+views = split_equirect(frame, cv2, size=1024, hfov_deg=90.0)</code></pre>
+
+  <div class="note">
+    The recorder treats the source as a full 360°×180° equirectangular panorama, so it
+    works on any equirect stream regardless of the <code>--projection</code> used for
+    live viewing. On a non-360 source the four views are still produced but won't be
+    meaningful.
+  </div>
+
+  <p class="foot">Part of Streamcatcher · design/demo page for the four-orientation split.</p>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const SRC_W = 1024, SRC_H = 512;
+  const VIEWS = [
+    { id: "v-front", yaw: 0,   color: "#e5484d", label: "FRONT" },
+    { id: "v-right", yaw: 90,  color: "#30a46c", label: "RIGHT" },
+    { id: "v-back",  yaw: 180, color: "#3b82f6", label: "BACK"  },
+    { id: "v-left",  yaw: -90, color: "#f5a524", label: "LEFT"  },
+  ];
+  const $ = (id) => document.getElementById(id);
+  const source = $("source"), sctx = source.getContext("2d");
+  let srcData = null;               // ImageData of the current panorama
+  const hfovEl = $("hfov"), pitchEl = $("pitch");
+
+  // --- synthetic equirectangular panorama (so the demo works with no input) ---
+  function drawSynthetic() {
+    // sky → horizon → ground
+    const g = sctx.createLinearGradient(0, 0, 0, SRC_H);
+    g.addColorStop(0, "#0b2545"); g.addColorStop(0.48, "#5b7fa6");
+    g.addColorStop(0.52, "#6b5138"); g.addColorStop(1, "#2c2013");
+    sctx.fillStyle = g; sctx.fillRect(0, 0, SRC_W, SRC_H);
+
+    // longitude grid every 30° with degree labels along the equator
+    sctx.strokeStyle = "rgba(255,255,255,0.18)"; sctx.lineWidth = 1;
+    sctx.fillStyle = "rgba(255,255,255,0.55)";
+    sctx.font = "12px monospace"; sctx.textAlign = "center";
+    for (let deg = -180; deg <= 180; deg += 30) {
+      const x = ((deg / 360) + 0.5) * SRC_W;
+      sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, SRC_H); sctx.stroke();
+      sctx.fillText(deg + "°", x, SRC_H / 2 - 6);
+    }
+    sctx.beginPath(); sctx.moveTo(0, SRC_H / 2); sctx.lineTo(SRC_W, SRC_H / 2); sctx.stroke();
+
+    // a coloured, labelled block centred on each cardinal heading
+    for (const v of VIEWS) {
+      const cx = (((v.yaw % 360) / 360) + 0.5) * SRC_W;
+      const bw = SRC_W * 0.16, bh = SRC_H * 0.30;
+      for (const off of [-SRC_W, 0, SRC_W]) {          // draw across the seam too
+        const x = cx + off;
+        sctx.fillStyle = v.color;
+        sctx.globalAlpha = 0.9;
+        sctx.fillRect(x - bw / 2, SRC_H / 2 - bh / 2, bw, bh);
+        sctx.globalAlpha = 1;
+        sctx.fillStyle = "#fff"; sctx.font = "bold 26px monospace";
+        sctx.fillText(v.label, x, SRC_H / 2 + 9);
+      }
+    }
+    srcData = sctx.getImageData(0, 0, SRC_W, SRC_H);
+    overlayWedges();
+    renderAll();
+  }
+
+  // faint wedge outlines on the source showing each view's horizontal extent
+  function overlayWedges() {
+    const hfov = +hfovEl.value;
+    for (const v of VIEWS) {
+      const c = (((v.yaw % 360) / 360) + 0.5) * SRC_W;
+      const half = (hfov / 360) * SRC_W / 2;
+      for (const off of [-SRC_W, 0, SRC_W]) {
+        sctx.strokeStyle = v.color; sctx.lineWidth = 3; sctx.globalAlpha = 0.85;
+        sctx.strokeRect(c + off - half, 4, half * 2, SRC_H - 8);
+      }
+    }
+    sctx.globalAlpha = 1;
+  }
+
+  // --- reprojection: one cardinal view (port of EquirectView) ---
+  function renderView(canvas, yawDeg) {
+    if (!srcData) return;
+    const S = canvas.width, ctx = canvas.getContext("2d");
+    const out = ctx.createImageData(S, S), o = out.data, s = srcData.data;
+    const hfov = +hfovEl.value * Math.PI / 180;
+    const pitch = +pitchEl.value * Math.PI / 180;
+    const yaw = yawDeg * Math.PI / 180;
+    const cx = (S - 1) / 2, cy = (S - 1) / 2;
+    const focal = (S / 2) / Math.tan(hfov / 2);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cyw = Math.cos(yaw), syw = Math.sin(yaw);
+    for (let v = 0; v < S; v++) {
+      for (let u = 0; u < S; u++) {
+        const x0 = u - cx, y0 = -(v - cy), z0 = focal;
+        // tilt about X (pitch), then pan about Y (yaw)
+        const y1 = y0 * cp + z0 * sp, z1 = -y0 * sp + z0 * cp;
+        const x2 = x0 * cyw + z1 * syw, z2 = -x0 * syw + z1 * cyw, y2 = y1;
+        const lon = Math.atan2(x2, z2);
+        const lat = Math.atan2(y2, Math.hypot(x2, z2));
+        let sx = ((lon / (2 * Math.PI)) + 0.5) * SRC_W;
+        let sy = (0.5 - lat / Math.PI) * SRC_H;
+        sx = ((Math.round(sx) % SRC_W) + SRC_W) % SRC_W;       // wrap longitude
+        sy = Math.min(SRC_H - 1, Math.max(0, Math.round(sy)));  // clamp latitude
+        const si = (sy * SRC_W + sx) * 4, di = (v * S + u) * 4;
+        o[di] = s[si]; o[di + 1] = s[si + 1]; o[di + 2] = s[si + 2]; o[di + 3] = 255;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+  }
+
+  function renderAll() { for (const v of VIEWS) renderView($(v.id), v.yaw); }
+
+  function refreshSourceOverlay() {
+    if (!srcData) return;
+    sctx.putImageData(srcData, 0, 0);
+    overlayWedges();
+    renderAll();
+  }
+
+  // --- controls ---
+  hfovEl.addEventListener("input", () => { $("hfovVal").textContent = hfovEl.value + "°"; refreshSourceOverlay(); });
+  pitchEl.addEventListener("input", () => { $("pitchVal").textContent = pitchEl.value + "°"; renderAll(); });
+  $("reset").addEventListener("click", drawSynthetic);
+  $("file").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const img = new Image();
+    img.onload = () => {
+      sctx.fillStyle = "#000"; sctx.fillRect(0, 0, SRC_W, SRC_H);
+      sctx.drawImage(img, 0, 0, SRC_W, SRC_H);   // fit to 2:1
+      srcData = sctx.getImageData(0, 0, SRC_W, SRC_H);
+      overlayWedges(); renderAll();
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(f);
+  });
+
+  drawSynthetic();
+})();
+</script>
+</body>
+</html>

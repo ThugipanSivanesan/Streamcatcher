@@ -54,6 +54,14 @@ def test_record_duration_loaded_from_env(monkeypatch):
     assert Settings().record_duration == 30.0
 
 
+def test_orientation_defaults(monkeypatch):
+    for var in ("STREAMCATCHER_ORIENTATION_SIZE", "STREAMCATCHER_ORIENTATION_HFOV_DEG"):
+        monkeypatch.delenv(var, raising=False)
+    settings = Settings()
+    assert settings.orientation_size == 1024
+    assert settings.orientation_hfov_deg == 90.0
+
+
 def test_api_reader_defaults_off(monkeypatch):
     monkeypatch.delenv("STREAMCATCHER_API_READER_ENABLED", raising=False)
     settings = Settings()

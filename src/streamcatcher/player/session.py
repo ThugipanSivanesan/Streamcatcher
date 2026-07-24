@@ -18,6 +18,12 @@ import os
 from dataclasses import dataclass
 
 from streamcatcher.config import Projection
+from streamcatcher.player.orientations import (
+    DEFAULT_HFOV_DEG,
+    DEFAULT_SIZE,
+    OrientationError,
+    split_equirect,
+)
 from streamcatcher.player.reprojection import (
     PITCH_STEP,
     YAW_STEP,
@@ -270,3 +276,41 @@ class StreamSession:
             os.makedirs(directory, exist_ok=True)
         if not cv2.imwrite(path, frame):
             raise SnapshotError(f"Could not write the snapshot to {path!r}.")
+
+    # -- orientation split ----------------------------------------------------
+
+    def split_orientations(
+        self, size: int = DEFAULT_SIZE, hfov_deg: float = DEFAULT_HFOV_DEG
+    ) -> dict:
+        """Grab one raw frame and split it into four cardinal views.
+
+        Reads the raw equirectangular frame (never the look-around viewport) —
+        retrying while a just-opened decoder returns empty — then reprojects it
+        into ``{"front", "right", "back", "left"}`` images. Raises
+        :class:`OrientationError` if no frame arrives.
+        """
+        frame = None
+        for _ in range(_SNAPSHOT_READ_ATTEMPTS):
+            frame = self.read_frame()
+            if frame is not None:
+                break
+        if frame is None:
+            raise OrientationError("No frame to split; the stream may have ended.")
+        cv2 = self._cv2 or _load_cv2()
+        return split_equirect(frame, cv2, size=size, hfov_deg=hfov_deg)
+
+    def write_orientations(self, views: dict, out_dir: str, ext: str = ".jpg") -> dict:
+        """Write each cardinal view to ``out_dir`` as ``<name><ext>``.
+
+        Creates ``out_dir`` if needed. Returns ``{name: path}``. Raises
+        :class:`OrientationError` if any file can't be written.
+        """
+        cv2 = self._cv2 or _load_cv2()
+        os.makedirs(out_dir, exist_ok=True)
+        paths: dict = {}
+        for name, image in views.items():
+            path = os.path.join(out_dir, f"{name}{ext}")
+            if not cv2.imwrite(path, image):
+                raise OrientationError(f"Could not write the orientation image to {path!r}.")
+            paths[name] = path
+        return paths
