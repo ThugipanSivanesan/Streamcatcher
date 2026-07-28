@@ -8,6 +8,8 @@ The project is pre-1.0 and built in small, tested vertical slices.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-28
+
 ### Added
 
 - **Recording** — `streamcatcher play --record [PATH]` records a live stream to a
@@ -31,6 +33,45 @@ The project is pre-1.0 and built in small, tested vertical slices.
   and field of view are tunable via `STREAMCATCHER_ORIENTATION_SIZE` /
   `STREAMCATCHER_ORIENTATION_HFOV_DEG`. Reuses the existing equirect reprojection;
   an interactive explainer lives at `docs/orientation-split.html`.
+
+### Fixed
+
+- **The reported version could drift from the real one.** `__version__` was a
+  hardcoded literal and had fallen behind `pyproject.toml`, so the HTTP API
+  advertised a stale version. It is now read from the installed distribution
+  metadata, which keeps the version in exactly one place.
+- **A long-running MJPEG viewer could have its session reaped mid-stream.** An
+  MJPEG client holds a single long request, so nothing marked the session as
+  recently used and the idle reaper eventually closed it out from under the
+  stream it was serving. The stream now marks its own session as active.
+- **Credentials could stop being redacted from logs.** Opening a second stream
+  replaced the redaction filter instead of extending it, so the first stream's
+  credentials — still in use — were no longer masked. Secrets now accumulate
+  into a single filter for the life of the process.
+- **Closing a stream could race the background frame reader.** The capture could
+  be released while the reader thread was still inside a blocking read, which is
+  undefined behaviour in OpenCV's native layer. Shutdown now waits for the
+  reader to actually exit, and declines to release the capture if it never does.
+  This affected the desktop player only, not the HTTP API.
+- **Concurrent requests could exceed the session limit.** Opening several
+  sessions at once could overshoot `STREAMCATCHER_API_MAX_SESSIONS`, because
+  each request checked the limit before the slow open rather than reserving a
+  slot. A failed open no longer permanently shrinks the limit either.
+- **The API accepted any string as a stream URL** (security). `POST /session`
+  now requires an `rtsp://` or `rtmp://` URL with a host and rejects anything
+  else with a 422. Previously the server would open whatever it was given —
+  including local file paths and URLs aimed at internal hosts.
+- **A failed `--record-mode ffmpeg` recording looked like a success.** If ffmpeg
+  exited on its own (an unsupported codec for the container, its own connection
+  refused), its output was discarded and nothing noticed, so no file was written
+  yet the run still reported "Recording finalized". Such a failure is now
+  reported while recording, quoting ffmpeg's own error.
+- **Expected errors printed a stack trace.** A stream that wouldn't open, a
+  snapshot that couldn't be captured, or `--record` on the `stub` backend
+  produced a Python traceback instead of the intended message. `play` now prints
+  the message and exits 1; unexpected errors still get a traceback.
+- **`.gitignore` missed the newer capture outputs**, so files written by
+  `--record` and `--orientations` showed up as untracked.
 
 ## [0.2.0] - 2026-07-21
 
@@ -88,6 +129,7 @@ First release on PyPI: `pip install streamcatcher`.
   window without an external media player (fixes a macOS windowing blocker). This
   made playback **video-only** — audio is no longer in scope.
 
-[Unreleased]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ThugipanSivanesan/Streamcatcher/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ThugipanSivanesan/Streamcatcher/releases/tag/v0.1.0
