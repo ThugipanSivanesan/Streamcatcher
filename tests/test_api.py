@@ -95,6 +95,66 @@ def test_open_failure_returns_502(fake_cv2):
         assert resp.status_code == 502
 
 
+def test_concurrent_creates_cannot_exceed_the_session_limit(fake_cv2, monkeypatch):
+    # The cap check and the insertion are separated by a slow, unlocked open, so
+    # without a reserved slot every concurrent create passes the check together.
+    import threading
+    import time
+
+    from streamcatcher.api.sessions import SessionLimitError, SessionManager
+    from streamcatcher.config import Projection
+    from streamcatcher.player.session import StreamSession
+
+    real_open = StreamSession.open
+
+    def slow_open(self):
+        time.sleep(0.05)  # widen the window every create is racing through
+        real_open(self)
+
+    monkeypatch.setattr(StreamSession, "open", slow_open)
+
+    manager = SessionManager(max_sessions=2, idle_timeout=300)
+    accepted: list[str] = []
+    rejected: list[str] = []
+
+    def create() -> None:
+        try:
+            accepted.append(manager.create(URL, Projection.FLAT).id)
+        except SessionLimitError:
+            rejected.append("429")
+
+    threads = [threading.Thread(target=create) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10.0)
+
+    try:
+        assert len(accepted) == 2  # exactly the cap, never more
+        assert len(rejected) == 6
+        assert len(manager.list_ids()) == 2
+    finally:
+        manager.close_all()
+
+
+def test_a_failed_open_releases_its_reserved_slot(fake_cv2):
+    # A reservation that leaked on failure would permanently shrink the cap.
+    from streamcatcher.api.sessions import SessionManager
+    from streamcatcher.config import Projection
+    from streamcatcher.player.session import StreamOpenError
+
+    manager = SessionManager(max_sessions=1, idle_timeout=300)
+    fake_cv2.open_ok = False
+    with pytest.raises(StreamOpenError):
+        manager.create(URL, Projection.FLAT)
+
+    fake_cv2.open_ok = True
+    try:
+        assert manager.create(URL, Projection.FLAT).id  # the slot came back
+    finally:
+        manager.close_all()
+
+
 # -- frames -------------------------------------------------------------------
 
 
@@ -126,6 +186,53 @@ def test_mjpeg_stream_yields_frames(fake_cv2):
         assert "multipart/x-mixed-replace" in resp.headers["content-type"]
         assert b"--frame" in resp.content
         assert b"\xff\xd8\xff" in resp.content
+
+
+def test_mjpeg_stream_keeps_its_session_alive(fake_cv2, monkeypatch):
+    # A viewer holds one long request, so nothing else marks the session used:
+    # without a per-frame touch the idle reaper closes it out from under them.
+    from fastapi.testclient import TestClient
+
+    from streamcatcher.api.sessions import ManagedSession
+
+    touched: list[str] = []
+    real_touch = ManagedSession.touch
+
+    def spy(self) -> None:
+        touched.append(self.id)
+        real_touch(self)
+
+    monkeypatch.setattr(ManagedSession, "touch", spy)
+
+    with TestClient(_create_app(fake_cv2, _frames=3, api_stream_fps=1000)) as client:
+        session_id = client.post("/session", json={"url": URL}).json()["id"]
+        touched.clear()  # ignore the touch from resolving the route
+        client.get(f"/session/{session_id}/stream.mjpg")
+
+    # One touch when the route resolved the session, then one per streamed frame.
+    assert touched.count(session_id) >= 4
+
+
+def test_touching_a_session_saves_it_from_the_reaper(fake_cv2):
+    # The mechanism the fix relies on: a touched session survives a sweep that
+    # would otherwise close it, which is what each streamed frame now buys.
+    import time
+
+    from streamcatcher.api.sessions import SessionManager
+    from streamcatcher.config import Projection
+
+    manager = SessionManager(max_sessions=4, idle_timeout=1)
+    stale = manager.create(URL, Projection.FLAT)
+    active = manager.create(URL, Projection.FLAT)
+    try:
+        stale.last_access = time.monotonic() - 10  # idle well past the timeout
+        active.last_access = time.monotonic() - 10
+        active.touch()  # what the MJPEG loop does per frame
+
+        assert manager.reap() == 1
+        assert manager.list_ids() == [active.id]
+    finally:
+        manager.close_all()
 
 
 # -- background reader (optional) ---------------------------------------------
@@ -200,6 +307,41 @@ def test_managed_session_on_demand_by_default_has_no_reader(fake_cv2):
     managed.close()
 
 
+# -- secret redaction across sessions -----------------------------------------
+
+
+def test_opening_a_second_session_keeps_redacting_the_first(fake_cv2):
+    # Each create installs its URL's credentials; replacing the filter (rather
+    # than accumulating) silently un-redacted every earlier session's password.
+    import logging
+
+    from streamcatcher.api.sessions import SessionManager
+    from streamcatcher.config import Projection
+    from streamcatcher.logging_setup import REDACTION, reset_secret_redaction
+
+    reset_secret_redaction()
+    manager = SessionManager(max_sessions=4, idle_timeout=300)
+    try:
+        manager.create("rtsp://alice:first_pw@cam-a.local/live", Projection.FLAT)
+        filt = manager.create("rtsp://bob:second_pw@cam-b.local/live", Projection.FLAT)
+        del filt
+
+        from streamcatcher.logging_setup import _installed_filter
+
+        record = logging.LogRecord(
+            "test", logging.INFO, __file__, 1, "first_pw then second_pw", None, None
+        )
+        _installed_filter.filter(record)
+        message = record.getMessage()
+
+        assert "first_pw" not in message  # session A's password is still covered
+        assert "second_pw" not in message
+        assert message == f"{REDACTION} then {REDACTION}"
+    finally:
+        manager.close_all()
+        reset_secret_redaction()
+
+
 # -- look controls ------------------------------------------------------------
 
 
@@ -271,3 +413,42 @@ def test_api_app_module_imports_without_web_stack(monkeypatch):
     monkeypatch.delitem(sys.modules, "streamcatcher.api.app", raising=False)
     module = importlib.import_module("streamcatcher.api.app")
     assert hasattr(module, "create_app")
+
+
+# -- stream URL validation ----------------------------------------------------
+#
+# cv2.VideoCapture opens local paths and http:// URLs just as readily as RTSP,
+# so an unvalidated url field let anyone with API access read arbitrary files
+# off the server or reach hosts only the server can see.
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/etc/passwd",
+        "file:///etc/passwd",
+        "http://169.254.169.254/latest/meta-data/",
+        "https://example.com/video.mp4",
+        "rtsp://",
+        "",
+    ],
+)
+def test_create_rejects_urls_that_are_not_streams(client, url, fake_cv2):
+    resp = client.post("/session", json={"url": url})
+    assert resp.status_code == 422
+    # Rejected at the model, before anything tries to open it.
+    assert fake_cv2.last_capture is None
+
+
+def test_create_still_accepts_rtsp_and_rtmp(client):
+    assert client.post("/session", json={"url": URL}).status_code == 201
+    assert client.post("/session", json={"url": "rtmp://live.example/app/key"}).status_code == 201
+
+
+def test_rejected_url_does_not_consume_a_session_slot(fake_cv2):
+    from fastapi.testclient import TestClient
+
+    with TestClient(_create_app(fake_cv2, api_max_sessions=1)) as client:
+        assert client.post("/session", json={"url": "file:///etc/passwd"}).status_code == 422
+        # The bad request must not have reserved the only slot.
+        assert client.post("/session", json={"url": URL}).status_code == 201

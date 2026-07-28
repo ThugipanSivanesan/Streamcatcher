@@ -1,10 +1,21 @@
 import logging
 
+import pytest
+
 from streamcatcher.logging_setup import (
     REDACTION,
     SecretRedactingFilter,
     install_secret_redaction,
+    reset_secret_redaction,
 )
+
+
+@pytest.fixture
+def clean_redaction():
+    """Isolate the process-wide installed filter from other tests."""
+    reset_secret_redaction()
+    yield
+    reset_secret_redaction()
 
 
 def _record(msg, args=None):
@@ -57,11 +68,40 @@ def test_clean_message_passes_through_unchanged():
     assert record.getMessage() == "stream connected"
 
 
-def test_install_attaches_filter_to_root_handlers():
+def test_install_attaches_filter_to_root_handlers(clean_redaction):
     filt = install_secret_redaction(["tok_live_123"])
     root = logging.getLogger()
-    try:
-        assert any(filt in handler.filters for handler in root.handlers)
-    finally:
-        for handler in root.handlers:
-            handler.removeFilter(filt)
+    assert any(filt in handler.filters for handler in root.handlers)
+
+
+def test_install_accumulates_secrets_instead_of_replacing_them(clean_redaction):
+    # A process learns secrets one at a time (the API opens a session per URL);
+    # installing the second must not stop redacting the first.
+    install_secret_redaction(["first_password"])
+    filt = install_secret_redaction(["second_password"])
+
+    record = _record("saw first_password and second_password")
+    filt.filter(record)
+    message = record.getMessage()
+
+    assert "first_password" not in message
+    assert "second_password" not in message
+
+
+def test_install_reuses_one_filter_per_handler(clean_redaction):
+    first = install_secret_redaction(["one"])
+    second = install_secret_redaction(["two"])
+
+    assert first is second  # the same accumulating filter, not a replacement
+    for handler in logging.getLogger().handlers:
+        installed = [f for f in handler.filters if isinstance(f, SecretRedactingFilter)]
+        assert len(installed) == 1  # no pile-up on the shared handler
+
+
+def test_add_secrets_keeps_earlier_literals():
+    filt = SecretRedactingFilter(["alpha"])
+    filt.add_secrets(["beta", "", "alpha"])  # empties and dupes are dropped
+
+    record = _record("alpha beta")
+    filt.filter(record)
+    assert record.getMessage() == f"{REDACTION} {REDACTION}"

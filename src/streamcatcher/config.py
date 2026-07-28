@@ -36,6 +36,30 @@ class RecordMode(StrEnum):
     FFMPEG = "ffmpeg"  # `ffmpeg -c copy` subprocess — lossless, keeps audio, needs the binary
 
 
+# The live-stream schemes Streamcatcher supports. Kept here so the CLI (which
+# uses them to tell a stream URL from an output path) and the HTTP API (which
+# validates request bodies against them) can't drift apart.
+STREAM_URL_SCHEMES = ("rtsp", "rtmp")
+
+# The same schemes as ``scheme://`` prefixes, for cheap token sniffing.
+STREAM_URL_PREFIXES = tuple(f"{scheme}://" for scheme in STREAM_URL_SCHEMES)
+
+
+def validate_stream_url(url: str) -> str:
+    """Return ``url`` unchanged if it is a supported stream URL, else raise.
+
+    Guards the boundary where a URL becomes a capture: OpenCV will happily open
+    a local file path or an ``http://`` address, so an unvalidated URL lets a
+    caller read arbitrary files or reach internal hosts through the server. A
+    netloc is required as well as the scheme, so ``rtsp://`` alone is rejected.
+    """
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in STREAM_URL_SCHEMES or not parts.netloc:
+        supported = " or ".join(STREAM_URL_PREFIXES)
+        raise ValueError(f"Stream URL must start with {supported} and include a host.")
+    return url
+
+
 def strip_url_credentials(url: str) -> str:
     """Return ``url`` with any ``user:pass@`` userinfo removed (host/port kept)."""
     parts = urlsplit(url)

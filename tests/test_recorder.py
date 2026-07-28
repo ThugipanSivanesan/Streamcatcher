@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -140,6 +142,11 @@ class _FakeProc:
         self.killed = True
         self._running = False
 
+    def die(self, returncode: int = 1) -> None:
+        """Simulate ffmpeg exiting on its own, without being asked to stop."""
+        self._running = False
+        self.returncode = returncode
+
 
 class _FakeStdin:
     def __init__(self) -> None:
@@ -245,6 +252,87 @@ def test_ffmpeg_recorder_does_not_expose_url_in_output_property(fake_ffmpeg):
 
 
 # --- build_recorder --------------------------------------------------------
+
+
+# --- FfmpegRecorder: a subprocess that dies on its own ----------------------
+#
+# ffmpeg holds its own connection, so it can fail (bad codec for the container,
+# its own auth failure) while playback looks perfectly healthy. It used to do so
+# silently: stderr went to DEVNULL and nothing polled the process, so the user
+# recorded nothing and stop() still logged "Recording finalized".
+
+
+def test_ffmpeg_recorder_captures_stderr_instead_of_discarding_it(fake_ffmpeg):
+    import subprocess
+
+    rec = FfmpegRecorder("out.mp4", "rtsp://cam/stream")
+    rec.start(None, fps=None)
+
+    stderr = fake_ffmpeg["captured"]["kwargs"]["stderr"]
+    assert stderr is not subprocess.DEVNULL  # discarding it is what lost the reason
+    assert hasattr(stderr, "fileno")  # a real file ffmpeg can be pointed at
+
+
+def test_ffmpeg_recorder_write_raises_once_the_process_has_died(fake_ffmpeg):
+    rec = FfmpegRecorder("out.mp4", "rtsp://cam/stream")
+    rec.start(None, fps=None)
+    rec.write(_frame())  # still running — no complaint
+
+    fake_ffmpeg["procs"][0].die(returncode=1)
+
+    with pytest.raises(RecordError) as excinfo:
+        rec.write(_frame())
+    assert "1" in str(excinfo.value)  # surfaces the exit code
+    assert "out.mp4" in str(excinfo.value)
+
+
+def test_ffmpeg_recorder_write_quotes_ffmpeg_stderr_in_the_error(fake_ffmpeg):
+    rec = FfmpegRecorder("out.mp4", "rtsp://cam/stream")
+    rec.start(None, fps=None)
+    # Whatever ffmpeg printed before dying is the only clue to *why*.
+    fake_ffmpeg["captured"]["kwargs"]["stderr"].write(b"Invalid data found when processing input")
+    fake_ffmpeg["procs"][0].die(returncode=1)
+
+    with pytest.raises(RecordError) as excinfo:
+        rec.write(_frame())
+    assert "Invalid data found when processing input" in str(excinfo.value)
+
+
+def test_ffmpeg_recorder_reports_a_dead_process_only_once(fake_ffmpeg):
+    rec = FfmpegRecorder("out.mp4", "rtsp://cam/stream")
+    rec.start(None, fps=None)
+    fake_ffmpeg["procs"][0].die(returncode=1)
+
+    with pytest.raises(RecordError):
+        rec.write(_frame())
+    # The player drops the recorder after the first RecordError, but a second
+    # write must not raise again (nor a stop() re-report it) — see below.
+    rec.write(_frame())
+    assert rec.is_recording() is False
+
+
+def test_ffmpeg_recorder_stop_does_not_claim_success_after_a_crash(fake_ffmpeg, caplog):
+    rec = FfmpegRecorder("out.mp4", "rtsp://cam/stream")
+    rec.start(None, fps=None)
+    fake_ffmpeg["captured"]["kwargs"]["stderr"].write(b"Could not write header")
+    fake_ffmpeg["procs"][0].die(returncode=1)
+
+    with caplog.at_level(logging.ERROR):
+        rec.stop()
+
+    assert "Recording finalized" not in caplog.text  # the old, false reassurance
+    assert "Could not write header" in caplog.text
+
+
+def test_ffmpeg_recorder_stop_still_reports_success_on_a_clean_exit(fake_ffmpeg, caplog):
+    rec = FfmpegRecorder("out.mp4", "rtsp://cam/stream")
+    rec.start(None, fps=None)
+    fake_ffmpeg["procs"][0].die(returncode=0)  # exited cleanly, e.g. source ended
+
+    with caplog.at_level(logging.INFO):
+        rec.stop()
+
+    assert "Recording finalized" in caplog.text
 
 
 def test_build_recorder_selects_opencv():

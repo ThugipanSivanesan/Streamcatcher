@@ -1,4 +1,12 @@
-from streamcatcher.config import Backend, RecordMode, Settings, strip_url_credentials
+import pytest
+
+from streamcatcher.config import (
+    Backend,
+    RecordMode,
+    Settings,
+    strip_url_credentials,
+    validate_stream_url,
+)
 
 
 def test_stream_url_defaults_to_none(monkeypatch):
@@ -81,3 +89,40 @@ def test_display_url_is_none_without_url(monkeypatch):
 
 def test_strip_url_credentials_leaves_clean_url_untouched():
     assert strip_url_credentials("rtmp://live.example/app/key") == "rtmp://live.example/app/key"
+
+
+# -- stream URL validation ----------------------------------------------------
+#
+# OpenCV opens whatever string it is handed — a local path, an http:// URL — so
+# this is the guard that keeps a caller-supplied URL from becoming arbitrary
+# file read or a request to an internal host.
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "rtsp://cam.local/stream1",
+        "rtmp://live.example/app/key",
+        "rtsp://user:pass@cam.local:554/stream1",
+        "RTSP://cam.local/stream1",  # scheme comparison is case-insensitive
+    ],
+)
+def test_validate_stream_url_accepts_supported_schemes(url):
+    assert validate_stream_url(url) == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/etc/passwd",  # a bare local path
+        "file:///etc/passwd",  # explicit file scheme
+        "http://169.254.169.254/latest/meta-data/",  # SSRF at an internal host
+        "https://example.com/video.mp4",
+        "rtsp://",  # scheme but no host
+        "",
+        "cam.local/stream1",  # no scheme at all
+    ],
+)
+def test_validate_stream_url_rejects_everything_else(url):
+    with pytest.raises(ValueError):
+        validate_stream_url(url)

@@ -141,6 +141,21 @@ class StreamSession:
             self._cap = None
         log.info("Stream session closed.")
 
+    def abandon(self) -> None:
+        """Drop the capture *without* releasing it, for when a read may be in flight.
+
+        Releasing a capture another thread is still blocked inside is undefined
+        behaviour in OpenCV's native layer and can crash the process. When a
+        background reader won't stop (see :meth:`FrameReader.stop`), the caller
+        abandons the capture instead: the session forgets it, so a later
+        :meth:`close` or :meth:`reconnect` is safe, and the operating system
+        reclaims the socket and decoder when the process exits.
+        """
+        if self._cap is not None:
+            log.warning("Abandoning the stream capture without releasing it (read in flight).")
+        self._cap = None
+        self._maps = None
+
     def reconnect(self) -> bool:
         """Tear down and re-open the capture, keeping the viewport orientation.
 

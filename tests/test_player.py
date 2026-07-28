@@ -643,3 +643,63 @@ def test_factory_ignores_record_duration_without_recording(fake_cv2):
     )
     player = get_player(settings)
     assert player._record_duration is None
+
+
+# -- reader shutdown vs. capture teardown -------------------------------------
+
+
+class _StubReader:
+    """A reader whose stop() outcome the test scripts."""
+
+    def __init__(self, stopped: bool) -> None:
+        self._stopped = stopped
+        self.stop_calls = 0
+
+    def stop(self) -> bool:
+        self.stop_calls += 1
+        return self._stopped
+
+
+def test_release_reader_releases_the_capture_once_the_thread_exited(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream")
+    player._session.open()
+    capture = fake_cv2.last_capture
+
+    player._release_reader(_StubReader(stopped=True))
+    player._session.close()
+
+    assert capture.release_calls == 1  # the normal path still frees the capture
+
+
+def test_release_reader_abandons_the_capture_when_the_thread_is_stuck(fake_cv2):
+    from streamcatcher.player.opencv_player import OpenCvPlayer
+
+    player = OpenCvPlayer("rtsp://cam/stream")
+    player._session.open()
+    capture = fake_cv2.last_capture
+
+    player._release_reader(_StubReader(stopped=False))
+    player._session.close()  # the later teardown must stay safe
+
+    # Releasing a capture a thread is still blocked inside is undefined
+    # behaviour in OpenCV's native layer, so it is deliberately leaked instead.
+    assert capture.release_calls == 0
+    assert player._session.is_open() is False
+
+
+def test_abandon_leaves_the_session_reconnectable(fake_cv2):
+    from streamcatcher.player.session import StreamSession
+
+    session = StreamSession("rtsp://cam/stream")
+    session.open()
+    abandoned = fake_cv2.last_capture
+
+    session.abandon()
+    assert session.is_open() is False
+    assert abandoned.release_calls == 0
+
+    assert session.reconnect() is True  # a fresh capture, no touch of the old one
+    assert fake_cv2.last_capture is not abandoned
+    assert abandoned.release_calls == 0

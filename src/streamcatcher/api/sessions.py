@@ -154,6 +154,7 @@ class SessionManager:
     def __init__(self, *, max_sessions: int, idle_timeout: int, reader_fps: int = 0) -> None:
         self._sessions: dict[str, ManagedSession] = {}
         self._lock = threading.Lock()
+        self._pending = 0  # slots reserved by in-flight create() calls
         self._max_sessions = max_sessions
         self._idle_timeout = idle_timeout
         self._reader_fps = reader_fps  # >0 gives each session a background reader
@@ -168,22 +169,33 @@ class SessionManager:
         # leak through any log line this session produces.
         install_secret_redaction(Settings(stream_url=url).secret_values())
 
+        # Reserve the slot up front. The open below is slow and runs unlocked, so
+        # checking the cap without reserving would let N concurrent creates all
+        # pass the check and overshoot ``max_sessions`` together.
         with self._lock:
-            if len(self._sessions) >= self._max_sessions:
+            if len(self._sessions) + self._pending >= self._max_sessions:
                 raise SessionLimitError(
                     f"Session limit reached ({self._max_sessions}); close a session first."
                 )
+            self._pending += 1
 
-        # Open outside the manager lock: a blocking open must not stall lookups
-        # of other, already-live sessions.
-        session = StreamSession(url, projection=projection)
-        session.open()  # raises StreamOpenError on failure
-        session_id = uuid.uuid4().hex
-        managed = ManagedSession(session_id, session, reader_fps=self._reader_fps)
-        with self._lock:
-            self._sessions[session_id] = managed
-        log.info("Opened session %s.", session_id)
-        return managed
+        opened: ManagedSession | None = None
+        try:
+            # Open outside the manager lock: a blocking open must not stall lookups
+            # of other, already-live sessions.
+            session = StreamSession(url, projection=projection)
+            session.open()  # raises StreamOpenError on failure
+            opened = ManagedSession(uuid.uuid4().hex, session, reader_fps=self._reader_fps)
+        finally:
+            # Register and release the reservation under one acquisition, so the
+            # slot is never double-counted (nor briefly free) in between.
+            with self._lock:
+                self._pending -= 1
+                if opened is not None:
+                    self._sessions[opened.id] = opened
+
+        log.info("Opened session %s.", opened.id)
+        return opened
 
     def get(self, session_id: str) -> ManagedSession:
         with self._lock:

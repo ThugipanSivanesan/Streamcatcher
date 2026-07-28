@@ -16,8 +16,14 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+# Capture output written into the working directory by `play`. Each matches the
+# timestamped default path its option falls back to when given no PATH/DIR;
+# an explicit path is the user's to place (and ignore) as they like.
 snapshots/
 streamcatcher-snapshot-*.jpg
+streamcatcher-recording-*.mp4
+streamcatcher-orientations-*/
+views/
 *.png
 !docs/**/*.png
 
