@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from collections.abc import Iterable
 
 REDACTION = "***"
@@ -26,13 +27,33 @@ _SECRET_PATTERNS = (
 )
 
 
+# The one filter installed on the root handlers; secrets accumulate into it.
+_installed_filter: SecretRedactingFilter | None = None
+
+
 class SecretRedactingFilter(logging.Filter):
     """Replace known secret values and secret-shaped substrings with ``***``."""
 
     def __init__(self, secret_values: Iterable[str] = ()) -> None:
         super().__init__()
         # De-duplicate, drop empties, keep order.
-        self._literals = tuple(dict.fromkeys(s for s in secret_values if s))
+        self._literals: tuple[str, ...] = ()
+        self._add_lock = threading.Lock()  # serialises concurrent add_secrets calls
+        self.add_secrets(secret_values)
+
+    def add_secrets(self, secret_values: Iterable[str]) -> None:
+        """Add more literals to redact, keeping the ones already known.
+
+        Secrets accumulate because a single process can learn them one at a
+        time — the API opens a session per stream URL — and forgetting the
+        earlier ones would un-redact credentials that are still in use. The
+        literal tuple is swapped in atomically, so :meth:`filter` running on
+        another thread always sees a consistent set.
+        """
+        with self._add_lock:
+            merged = dict.fromkeys(self._literals)
+            merged.update(dict.fromkeys(s for s in secret_values if s))
+            self._literals = tuple(merged)
 
     def _redact(self, text: str) -> str:
         for literal in self._literals:
@@ -62,18 +83,44 @@ def install_secret_redaction(
 
     Creates a default stream handler if the root logger has none. Returns the
     installed filter so callers (and tests) can reference or remove it.
+
+    There is exactly one filter per process and repeated calls **accumulate**
+    into it: the API installs a new URL's credentials on every session it opens,
+    and replacing the filter would stop redacting every earlier session's
+    still-live credentials.
     """
+    global _installed_filter
+
     root = logging.getLogger()
     root.setLevel(level)
     if not root.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
         root.addHandler(handler)
-    redaction_filter = SecretRedactingFilter(secret_values)
+    if _installed_filter is None:
+        _installed_filter = SecretRedactingFilter(secret_values)
+    else:
+        _installed_filter.add_secrets(secret_values)
+    redaction_filter = _installed_filter
     for handler in root.handlers:
-        # Drop any previously-installed redaction filter so repeated calls don't
-        # pile filters up on the shared handler.
-        for existing in [f for f in handler.filters if isinstance(f, SecretRedactingFilter)]:
+        # Drop any *other* redaction filter so repeated calls don't pile filters
+        # up on the shared handler, then attach ours if it isn't there yet.
+        for existing in [
+            f
+            for f in handler.filters
+            if isinstance(f, SecretRedactingFilter) and f is not redaction_filter
+        ]:
             handler.removeFilter(existing)
-        handler.addFilter(redaction_filter)
+        if redaction_filter not in handler.filters:
+            handler.addFilter(redaction_filter)
     return redaction_filter
+
+
+def reset_secret_redaction() -> None:
+    """Forget the process-wide filter and detach it (for tests)."""
+    global _installed_filter
+
+    if _installed_filter is not None:
+        for handler in logging.getLogger().handlers:
+            handler.removeFilter(_installed_filter)
+    _installed_filter = None

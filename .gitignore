@@ -18,6 +18,7 @@ build/
 *.egg-info/
 snapshots/
 streamcatcher-snapshot-*.jpg
+views/
 *.png
 !docs/**/*.png
 

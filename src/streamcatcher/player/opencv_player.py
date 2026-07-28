@@ -149,7 +149,7 @@ class OpenCvPlayer:
                 if cv2.getWindowProperty(_WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
                     break  # the user closed the window
                 if reader.ended():
-                    reader.stop()
+                    self._release_reader(reader)
                     if not self._policy.enabled:
                         log.info("Stream ended or dropped.")
                         break
@@ -161,9 +161,24 @@ class OpenCvPlayer:
             log.info("Interrupted — closing the stream.")
         finally:
             if reader is not None:
-                reader.stop()
+                self._release_reader(reader)
             self._stop_recording()
             self.stop()
+
+    def _release_reader(self, reader: FrameReader) -> None:
+        """Stop the reader before anything touches the capture it owns.
+
+        If the thread can't be stopped it is still inside ``cap.read()``, so the
+        capture must not be released or re-opened under it — abandon it instead
+        and let the process reclaim it. This is the last resort; the reader waits
+        a long time first.
+        """
+        if not reader.stop():
+            log.warning(
+                "Leaving the stream capture open because the reader thread never "
+                "returned; releasing it now could crash the process."
+            )
+            self._session.abandon()
 
     def _reconnect(self, cv2) -> bool:
         """Retry a dropped stream with exponential backoff.

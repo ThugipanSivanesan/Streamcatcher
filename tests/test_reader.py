@@ -5,10 +5,34 @@ so a real thread runs, but against a scripted, instant fake capture — no netwo
 no decoder, no window.
 """
 
+import threading
+
+import numpy as np
+
+import streamcatcher.player.reader as reader_module
 from streamcatcher.player.reader import FrameReader
 from streamcatcher.player.session import StreamSession
 
 URL = "rtsp://cam/stream"
+
+
+class _StuckSession:
+    """A session whose reads block forever after the first — a stalled stream.
+
+    This is the scenario the reader exists for, and the one where releasing the
+    capture under the thread is unsafe.
+    """
+
+    def __init__(self, release: threading.Event) -> None:
+        self._release = release
+        self.reads = 0
+
+    def read_frame(self):
+        self.reads += 1
+        if self.reads == 1:
+            return np.zeros((8, 16, 3), dtype=np.uint8)  # prime start() and return
+        self._release.wait(10.0)  # blocked, exactly like a stalled cap.read()
+        return None
 
 
 def _open_session(fake_cv2) -> StreamSession:
@@ -61,3 +85,29 @@ def test_reader_stop_joins_the_thread(fake_cv2):
 
     assert reader._thread is None  # stop() joined and cleared the thread
     reader.stop()  # idempotent — safe to call again
+
+
+def test_stop_reports_success_so_the_caller_may_release_the_capture(fake_cv2):
+    fake_cv2.frames = 1_000_000
+    reader = FrameReader(_open_session(fake_cv2))
+    reader.start()
+
+    assert reader.stop() is True  # thread exited; the capture is safe to release
+    assert reader.stop() is True  # still true once already stopped
+
+
+def test_stop_reports_failure_when_the_thread_stays_in_a_blocking_read(monkeypatch):
+    # Keep the test fast; the real budget is _STOP_TIMEOUT seconds.
+    monkeypatch.setattr(reader_module, "_STOP_TIMEOUT", 0.3)
+    monkeypatch.setattr(reader_module, "_JOIN_SLICE", 0.05)
+    release = threading.Event()
+    reader = FrameReader(_StuckSession(release))
+    reader.start()
+    try:
+        # The thread is parked inside read_frame(), so stop() must not claim
+        # success — releasing the capture here is what could crash the process.
+        assert reader.stop() is False
+        assert reader._thread is not None  # still tracked, still running
+    finally:
+        release.set()
+        reader._thread.join(timeout=5.0)

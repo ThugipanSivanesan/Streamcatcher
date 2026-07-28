@@ -15,9 +15,21 @@ drive it with a fake.
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 
 from streamcatcher.player.session import StreamSession
+
+log = logging.getLogger("streamcatcher.player.reader")
+
+# How long :meth:`FrameReader.stop` waits for the thread to leave its blocking
+# read before giving up. A stalled read is exactly why the reader exists, so the
+# budget is generous: releasing the capture while a read is in flight is
+# undefined behaviour in the native layer and can take the process down.
+_STOP_TIMEOUT = 10.0
+# Join in slices so a slow shutdown can say why it is taking a moment.
+_JOIN_SLICE = 1.0
 
 
 class FrameReader:
@@ -56,12 +68,35 @@ class FrameReader:
         with self._lock:
             return self._ended
 
-    def stop(self) -> None:
-        """Signal the reader to stop and join it (idempotent, bounded wait)."""
+    def stop(self) -> bool:
+        """Signal the reader to stop and join it (idempotent, bounded wait).
+
+        Returns ``True`` once the thread has actually exited — the caller may
+        then release the capture — or ``False`` if it is still inside a blocking
+        read after :data:`_STOP_TIMEOUT`. Callers **must not** release or re-open
+        the capture on ``False``; see :meth:`StreamSession.abandon`.
+        """
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
-            self._thread = None
+        thread = self._thread
+        if thread is None:
+            return True
+        deadline = time.monotonic() + _STOP_TIMEOUT
+        waited = False
+        while True:
+            thread.join(timeout=_JOIN_SLICE)
+            if not thread.is_alive():
+                self._thread = None
+                return True
+            if time.monotonic() >= deadline:
+                log.warning(
+                    "The frame reader is still blocked in a stream read after %.0fs "
+                    "and could not be stopped.",
+                    _STOP_TIMEOUT,
+                )
+                return False
+            if not waited:
+                waited = True
+                log.info("Waiting for the frame reader to finish its current read…")
 
     # -- internals ------------------------------------------------------------
 

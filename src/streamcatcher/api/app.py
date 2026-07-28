@@ -177,6 +177,10 @@ def create_app(settings: Settings | None = None):
 
         def frames():
             while True:
+                # An MJPEG viewer holds one long request, so nothing else marks
+                # the session as used; touch each iteration or the idle reaper
+                # closes the session out from under the stream it is serving.
+                managed.touch()
                 frame = managed.grab_view()
                 if frame is None:
                     break
