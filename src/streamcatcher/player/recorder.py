@@ -11,8 +11,10 @@ audio**. It needs the ``ffmpeg`` binary on ``PATH``.
 
 Both satisfy the :class:`Recorder` protocol so the player brackets either one the
 same way: :meth:`~Recorder.start` when the first frame arrives, :meth:`write`
-per new frame (a no-op for ffmpeg, which pulls the stream itself), and
-:meth:`stop` on the way out. ``cv2`` is imported lazily via
+per new frame (which pushes no frames for ffmpeg, since it pulls the stream
+itself, but does check that it is still alive), and :meth:`stop` on the way out.
+Either backend may raise :class:`RecordError` from any of the three; the player
+warns, drops the recorder, and keeps playing. ``cv2`` is imported lazily via
 :func:`streamcatcher.player.session._load_cv2`, so importing this module never
 requires OpenCV.
 """
@@ -23,6 +25,7 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 from typing import Protocol, runtime_checkable
 
 from streamcatcher.config import RecordMode, Settings
@@ -37,6 +40,10 @@ _RTSP_SCHEMES = ("rtsp://",)
 # before escalating to terminate()/kill(). mp4 needs a clean exit to write its
 # moov atom, so we give it real time.
 _FFMPEG_STOP_TIMEOUT = 10.0
+
+# How much of ffmpeg's stderr to quote when it dies. Its diagnostics are short
+# (one line for a bad codec or a refused connection), so this is generous.
+_FFMPEG_STDERR_LIMIT = 2000
 
 
 class RecordError(RuntimeError):
@@ -56,7 +63,10 @@ class Recorder(Protocol):
         ...
 
     def write(self, frame) -> None:
-        """Append one frame (opencv), or a no-op (ffmpeg copies the stream itself)."""
+        """Append one frame (opencv), or check the subprocess is alive (ffmpeg).
+
+        Raises :class:`RecordError` if the recording can no longer continue.
+        """
         ...
 
     def stop(self) -> None:
@@ -164,15 +174,25 @@ class FfmpegRecorder:
 
     Runs a subprocess that opens its own connection to ``url`` and copies the
     stream to disk without re-encoding, so both video and audio are preserved.
-    :meth:`write` is a no-op — ffmpeg pulls the stream itself. Because a partially
-    written mp4 has no moov atom and won't play, :meth:`stop` asks ffmpeg to quit
-    gracefully (``q`` on stdin) and waits before escalating.
+    Because a partially written mp4 has no moov atom and won't play, :meth:`stop`
+    asks ffmpeg to quit gracefully (``q`` on stdin) and waits before escalating.
+
+    ffmpeg holds its own connection, so it can fail entirely on its own — a codec
+    the container won't take, or credentials its connection is refused with —
+    while playback carries on looking healthy. :meth:`write` pushes no frames but
+    is still called once per frame, so it doubles as the liveness check: it polls
+    the subprocess and raises :class:`RecordError` (quoting stderr) the moment it
+    has exited, rather than letting :meth:`stop` claim success over no file.
     """
 
     def __init__(self, path: str, url: str) -> None:
         self._path = path
         self._url = url  # secret: embeds credentials, so it is never logged
         self._proc: subprocess.Popen | None = None
+        # ffmpeg's stderr, captured to a temp file rather than DEVNULL so a
+        # failure can say *why*. A pipe would risk filling and blocking ffmpeg,
+        # since nothing drains it while recording runs.
+        self._stderr = None
 
     @property
     def output(self) -> str:
@@ -196,30 +216,56 @@ class FfmpegRecorder:
         if self._url.lower().startswith(_RTSP_SCHEMES):
             command += ["-rtsp_transport", "tcp"]
         command += ["-i", self._url, "-c", "copy", self._path]
+        self._stderr = tempfile.TemporaryFile(mode="w+b")
         try:
-            # stdin is a pipe so stop() can send 'q'; output is discarded to keep
-            # the pipe from filling and blocking ffmpeg.
+            # stdin is a pipe so stop() can send 'q'; stdout is discarded, but
+            # stderr goes to a temp file so a failure can be reported with cause.
             self._proc = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=self._stderr,
             )
         except OSError as exc:
+            self._close_stderr()
             raise RecordError(f"Could not start ffmpeg: {exc}") from exc
         log.info("Recording to %s (ffmpeg -c copy).", self._path)
 
     def write(self, frame) -> None:
-        # ffmpeg copies the stream on its own connection; nothing to push here.
-        return
+        """No frames to push, but notice if ffmpeg has died. Raises on failure."""
+        proc = self._proc
+        if proc is None or proc.poll() is None:
+            return  # never started, already reported, or still running
+        # It exited without being asked to: the recording is incomplete, and
+        # staying quiet here is what let stop() report a success over no file.
+        returncode = proc.returncode
+        detail = self._stderr_tail()
+        self._proc = None  # reported once; stop() shouldn't repeat it
+        self._close_stderr()
+        raise RecordError(
+            f"ffmpeg stopped on its own (exit code {returncode}), so the recording "
+            f"at {self._path!r} is incomplete.{detail}"
+        )
 
     def stop(self) -> None:
         proc = self._proc
         if proc is None:
+            self._close_stderr()
             return
         self._proc = None
         if proc.poll() is not None:
-            log.info("Recording finalized: %s", self._path)
+            # Exited before we asked it to — success only if it said so.
+            if proc.returncode == 0:
+                log.info("Recording finalized: %s", self._path)
+            else:
+                log.error(
+                    "ffmpeg stopped on its own (exit code %s), so the recording at %s "
+                    "is incomplete.%s",
+                    proc.returncode,
+                    self._path,
+                    self._stderr_tail(),
+                )
+            self._close_stderr()
             return
         # Ask ffmpeg to quit cleanly so it finalizes the container, then escalate.
         try:
@@ -238,7 +284,35 @@ class FfmpegRecorder:
                 proc.wait(timeout=5.0)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        self._close_stderr()
         log.info("Recording finalized: %s", self._path)
+
+    # -- internals ------------------------------------------------------------
+
+    def _stderr_tail(self) -> str:
+        """ffmpeg's captured stderr as a message suffix, or ``""`` if it said nothing."""
+        if self._stderr is None:
+            return ""
+        try:
+            self._stderr.seek(0)
+            text = self._stderr.read().decode("utf-8", "replace").strip()
+        except (OSError, ValueError):  # already closed, or unreadable
+            return ""
+        if not text:
+            return ""
+        if len(text) > _FFMPEG_STDERR_LIMIT:
+            text = f"…{text[-_FFMPEG_STDERR_LIMIT:]}"
+        return f" ffmpeg said: {text}"
+
+    def _close_stderr(self) -> None:
+        """Drop the stderr capture file (deleted on close). Safe to call twice."""
+        if self._stderr is None:
+            return
+        try:
+            self._stderr.close()
+        except OSError:  # pragma: no cover - defensive
+            pass
+        self._stderr = None
 
 
 def build_recorder(mode: RecordMode, path: str, settings: Settings, url: str) -> Recorder:

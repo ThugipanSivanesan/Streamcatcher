@@ -413,3 +413,42 @@ def test_api_app_module_imports_without_web_stack(monkeypatch):
     monkeypatch.delitem(sys.modules, "streamcatcher.api.app", raising=False)
     module = importlib.import_module("streamcatcher.api.app")
     assert hasattr(module, "create_app")
+
+
+# -- stream URL validation ----------------------------------------------------
+#
+# cv2.VideoCapture opens local paths and http:// URLs just as readily as RTSP,
+# so an unvalidated url field let anyone with API access read arbitrary files
+# off the server or reach hosts only the server can see.
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/etc/passwd",
+        "file:///etc/passwd",
+        "http://169.254.169.254/latest/meta-data/",
+        "https://example.com/video.mp4",
+        "rtsp://",
+        "",
+    ],
+)
+def test_create_rejects_urls_that_are_not_streams(client, url, fake_cv2):
+    resp = client.post("/session", json={"url": url})
+    assert resp.status_code == 422
+    # Rejected at the model, before anything tries to open it.
+    assert fake_cv2.last_capture is None
+
+
+def test_create_still_accepts_rtsp_and_rtmp(client):
+    assert client.post("/session", json={"url": URL}).status_code == 201
+    assert client.post("/session", json={"url": "rtmp://live.example/app/key"}).status_code == 201
+
+
+def test_rejected_url_does_not_consume_a_session_slot(fake_cv2):
+    from fastapi.testclient import TestClient
+
+    with TestClient(_create_app(fake_cv2, api_max_sessions=1)) as client:
+        assert client.post("/session", json={"url": "file:///etc/passwd"}).status_code == 422
+        # The bad request must not have reserved the only slot.
+        assert client.post("/session", json={"url": URL}).status_code == 201

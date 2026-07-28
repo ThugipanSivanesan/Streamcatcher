@@ -5,10 +5,16 @@ reprojection, API layer, CI). Overall a well-built codebase — clean layering
 around `StreamSession`, offline-first lazy imports, deliberate secret handling,
 and unusually good docstrings. Findings below, ordered by priority.
 
-**Status (2026-07-28):** items 1–5 are fixed on `fix/code-review-1-5`, each with
-a regression test verified to fail without its fix, plus the broken local venv
-that made item 1's fix invisible (see item 1). Item 8 needed no change (it was
-already documented). Items 6, 7 and 9–16 are open. Suite: 215 passed, 0 skipped.
+**Status (2026-07-28):**
+
+- Items **1–5** fixed on `fix/code-review-1-5`, plus the broken local venv that
+  made item 1's fix invisible (see item 1).
+- Items **6, 9, 10** fixed on `fix/code-review-6-9-10`.
+- Item **8** needed no change (already documented).
+- Items **7, 11–16** remain open.
+
+Every fix carries a regression test verified to fail without it. Suite: 246
+passed, 0 skipped, ruff clean.
 
 ## Bugs worth fixing first
 
@@ -84,14 +90,19 @@ already documented). Items 6, 7 and 9–16 are open. Suite: 215 passed, 0 skippe
 
 ## Security tightening
 
-6. **The API accepts any string as a stream URL.** `CreateSessionRequest.url`
-   (`src/streamcatcher/api/models.py:18`) is an unvalidated `str`, and the
-   factory doesn't validate schemes either — `cv2.VideoCapture` will happily
-   open local file paths, `http://` URLs, etc. Anyone with API access can point
-   the server at arbitrary local files or internal hosts (SSRF-ish).
-   Validate `rtsp://`/`rtmp://` in the model to match the CLI's stated
-   contract. (`CODEBASE_NOTES.md` claims the factory "validates the stream
-   URL" — it only checks for `None`.)
+6. ~~**The API accepts any string as a stream URL.**~~ **Fixed.**
+   `CreateSessionRequest.url` now runs a `field_validator` that rejects
+   anything which isn't an `rtsp://`/`rtmp://` URL *with a host*, so a local
+   path, `file://`, or an `http://` address aimed at an internal host is
+   refused with a 422 before anything tries to open it. The scheme list lives
+   in `config.STREAM_URL_SCHEMES` with a shared `validate_stream_url()`, and
+   the CLI's own token sniffing now reads from the same constant instead of its
+   private copy — so the two can't drift.
+
+   Scope note: the guard is on the API request model, which is where the
+   finding placed it. `Settings.stream_url` is deliberately left unvalidated —
+   constraining it would also constrain library and test callers, which is a
+   wider behaviour change than this finding asked for.
 
 7. **Bearer-token check isn't constant-time.** `require_token`
    (`src/streamcatcher/api/app.py:76`) compares with `!=`; use
@@ -105,22 +116,32 @@ already documented). Items 6, 7 and 9–16 are open. Suite: 215 passed, 0 skippe
    including that the default `opencv` record mode doesn't spawn a subprocess.
    Left open only if you want to go beyond documenting it.
 
-9. **ffmpeg failures are silent until stop.** `stderr` goes to `DEVNULL` and
-   nothing ever polls the process (`src/streamcatcher/player/recorder.py:202-210`),
-   so if ffmpeg dies immediately (bad codec for the container, auth failure on
-   its own connection), the user records nothing and `stop()` still logs
-   "Recording finalized". Cheap fix: have `write()` poll `self._proc` and raise
-   `RecordError` once it has exited — the player already handles that path
-   gracefully — and capture stderr into a pipe or tempfile for the message.
+9. ~~**ffmpeg failures are silent until stop.**~~ **Fixed**, in the three places
+   the silence came from:
+   - `stderr` now goes to a `tempfile.TemporaryFile` instead of `DEVNULL`, so a
+     failure can say *why*. (A pipe would risk filling and blocking ffmpeg,
+     since nothing drains it while recording runs — hence a file.)
+   - `write()` polls the subprocess and raises `RecordError` quoting that
+     stderr the moment it has exited. `write()` pushes no frames in ffmpeg mode
+     but is still called once per frame, which makes it the natural liveness
+     check; the player's existing `except RecordError` already warns, drops the
+     recorder, and keeps playing.
+   - `stop()` no longer logs "Recording finalized" unconditionally. A process
+     that exited on its own is only reported as success if its exit code was 0;
+     otherwise it logs an error with the stderr tail.
+
+   A death is reported exactly once — `write()` clears `_proc` after raising, so
+   a later `stop()` stays quiet rather than repeating it.
 
 ## Robustness and UX polish
 
-10. **Known errors surface as raw tracebacks in the CLI.** `play` doesn't catch
-    `StreamOpenError`, `SnapshotError`, `OrientationError`, or the factory's
-    `ValueError` (stub + `--record`), so a wrong URL gives the user a stack
-    trace instead of the carefully written friendly messages. A small
-    try/except in `cli.py:play` printing the message and exiting 1 would let
-    all that good error text land properly.
+10. ~~**Known errors surface as raw tracebacks in the CLI.**~~ **Fixed.** `play`
+    now wraps the factory call and the three player actions in a single
+    try/except over `_EXPECTED_FAILURES` — `StreamOpenError`, `SnapshotError`,
+    `OrientationError`, `RecordError`, and `ValueError` (the factory's own
+    rejections) — printing the exception's message in red on stderr and exiting
+    1. The messages already written into those exceptions now actually reach the
+    user. Anything *not* in that tuple is a bug and still gets a full traceback.
 
 11. **`Settings` numeric fields are unconstrained.** Negative
     `reconnect_base_delay`, zero `orientation_size`, `record_fps <= 0`, etc.
@@ -184,12 +205,22 @@ treats it as unacceptable regardless since the alternative is a long wait.
 
 ## Remaining work
 
-Next most valuable, in order:
+Nothing high-severity is left: every finding that lost data silently, crashed,
+or widened the attack surface is now closed. What remains is small and
+independent, roughly in descending value:
 
-1. **Item 9** (silent ffmpeg failure) — the only remaining finding that loses
-   user data with no signal until `stop()` claims success.
-2. **Item 10** (raw tracebacks in the CLI) — the one users hit most often, and
-   it currently wastes the carefully written error messages already in the code.
-3. **Item 6** (unvalidated stream URL) — the only real security finding left
-   now that 7 is a one-liner and 8 is documented.
-4. Items 7, 11, 14, 15, 16 — small, independent, and each a few lines.
+1. **Item 13** (API clients can't tell a stream has ended) — the largest piece
+   of real work left, and the only one needing an API shape decision (an
+   `ended`/`is_open` field, and possibly a reconnect endpoint). Narrower than it
+   reads — see the verification notes.
+2. **Item 11** (unconstrained `Settings` numerics) — free with Pydantic
+   `Field(gt=0)`, and turns several confusing late failures into clear ones.
+3. **Item 7** (non-constant-time token compare) — a one-line
+   `secrets.compare_digest`.
+4. **Item 14** (four small nits) — the IPv6 bug in `strip_url_credentials` is
+   the only one with real teeth.
+5. **Item 12** (GUI busy-spin) — real but small; see the verification notes.
+6. **Items 15, 16** (gitignore patterns, stale `CODEBASE_NOTES.md`) —
+   housekeeping. Item 15 is partly done: `views/` is now ignored, but the
+   general `streamcatcher-recording-*.mp4` and `streamcatcher-orientations-*/`
+   patterns are still missing.

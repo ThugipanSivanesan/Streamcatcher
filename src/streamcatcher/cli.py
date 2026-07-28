@@ -9,9 +9,12 @@ import time
 import typer
 from typer.core import TyperCommand
 
-from streamcatcher.config import Backend, Projection, RecordMode, Settings
+from streamcatcher.config import STREAM_URL_PREFIXES, Backend, Projection, RecordMode, Settings
 from streamcatcher.logging_setup import install_secret_redaction
 from streamcatcher.player.factory import get_player
+from streamcatcher.player.orientations import OrientationError
+from streamcatcher.player.recorder import RecordError
+from streamcatcher.player.session import SnapshotError, StreamOpenError
 
 app = typer.Typer(
     help="Connect to an RTMP/RTSP stream and view it in a small window.",
@@ -20,6 +23,19 @@ app = typer.Typer(
 )
 
 log = logging.getLogger("streamcatcher")
+
+# Failures the player and factory raise with a message written *for the user*
+# (bad URL, unwritable snapshot path, missing ffmpeg, stub backend + --record).
+# Letting these escape would print a stack trace and waste that message, so
+# ``play`` prints it and exits 1 instead. Anything not listed here is a bug and
+# still gets a traceback. ``ValueError`` covers the factory's own rejections.
+_EXPECTED_FAILURES = (
+    StreamOpenError,
+    SnapshotError,
+    OrientationError,
+    RecordError,
+    ValueError,
+)
 
 
 def _default_snapshot_path() -> str:
@@ -45,15 +61,15 @@ _OPTIONAL_PATH_DEFAULTS = {
     "--orientations": _default_orientations_dir,
 }
 
-# Schemes a stream URL uses. An output path is always a local path, never a
-# stream URL, so a token with one of these schemes right after a bare optional
-# option is the URL argument, not that option's path (see below).
-_STREAM_URL_SCHEMES = ("rtsp://", "rtmp://")
-
 
 def _looks_like_stream_url(token: str) -> bool:
-    """Whether ``token`` is a stream URL rather than an output path."""
-    return token.lower().startswith(_STREAM_URL_SCHEMES)
+    """Whether ``token`` is a stream URL rather than an output path.
+
+    An output path is always a local path, never a stream URL, so a token with a
+    stream scheme right after a bare optional option is the URL argument, not
+    that option's path (see below).
+    """
+    return token.lower().startswith(STREAM_URL_PREFIXES)
 
 
 class _OptionalPathCommand(TyperCommand):
@@ -204,13 +220,17 @@ def play(
     install_secret_redaction(settings.secret_values())
 
     log.info("Connecting to %s", settings.display_url)
-    player = get_player(settings, record_path=record)
-    if snapshot is not None:
-        player.snapshot(snapshot)
-    elif orientations is not None:
-        player.save_orientations(orientations)
-    else:
-        player.play()
+    try:
+        player = get_player(settings, record_path=record)
+        if snapshot is not None:
+            player.snapshot(snapshot)
+        elif orientations is not None:
+            player.save_orientations(orientations)
+        else:
+            player.play()
+    except _EXPECTED_FAILURES as exc:
+        typer.secho(str(exc), err=True, fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
     log.info("Backend: %s", settings.backend.value)
 
 

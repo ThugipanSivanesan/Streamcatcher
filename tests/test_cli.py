@@ -453,3 +453,83 @@ def test_no_args_shows_help():
     result = runner.invoke(app, [])
     assert result.exit_code != 0
     assert "Usage" in result.output
+
+
+# -- known failures print a message, not a stack trace -------------------------
+#
+# play() used to let StreamOpenError, SnapshotError, OrientationError and the
+# factory's ValueError escape, so a wrong URL gave the user a traceback and the
+# carefully written message inside the exception never got seen.
+
+
+def _all_output(result) -> str:
+    """CliRunner output plus stderr, which click may or may not capture apart."""
+    text = result.output
+    try:
+        text += result.stderr
+    except ValueError:  # stderr not captured separately on this click version
+        pass
+    return text
+
+
+def _assert_clean_failure(result, expected: str) -> None:
+    assert result.exit_code == 1
+    assert expected in _all_output(result)
+    # A traceback means the exception escaped instead of being reported.
+    assert "Traceback" not in _all_output(result)
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_play_reports_an_unopenable_stream_without_a_traceback(fake_cv2):
+    fake_cv2.open_ok = False
+
+    result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--no-reconnect"])
+
+    _assert_clean_failure(result, "Could not open the stream")
+
+
+def test_play_reports_a_failed_snapshot_without_a_traceback(fake_cv2):
+    fake_cv2.frames = 0  # decoder never yields a frame
+
+    result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--snapshot", "out.jpg"])
+
+    _assert_clean_failure(result, "No frame to snapshot")
+
+
+def test_play_reports_a_failed_orientation_split_without_a_traceback(fake_cv2):
+    fake_cv2.frames = 0
+
+    result = runner.invoke(
+        app, ["play", "rtsp://cam.local/stream1", "--projection", "equirect", "--orientations", "d"]
+    )
+
+    _assert_clean_failure(result, "No frame to split")
+
+
+def test_play_reports_the_stub_backend_rejecting_record(fake_cv2, tmp_path):
+    # The factory raises a plain ValueError for this one.
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "-b", "stub", "--record", str(tmp_path / "out.mp4")],
+    )
+
+    _assert_clean_failure(result, "Recording needs the 'opencv' backend")
+
+
+def test_play_reports_a_recorder_that_wont_open(fake_cv2, tmp_path):
+    fake_cv2.videowriter_ok = False
+
+    result = runner.invoke(
+        app,
+        ["play", "rtsp://cam.local/stream1", "--no-reconnect", "--record", str(tmp_path / "o.mp4")],
+    )
+
+    # The player warns and keeps playing rather than dying, so this still exits 0 —
+    # the point is that it never raises a traceback either way.
+    assert result.exit_code == 0
+    assert "Traceback" not in _all_output(result)
+
+
+def test_play_still_exits_zero_on_success(fake_cv2):
+    result = runner.invoke(app, ["play", "rtsp://cam.local/stream1", "--no-reconnect"])
+    assert result.exit_code == 0

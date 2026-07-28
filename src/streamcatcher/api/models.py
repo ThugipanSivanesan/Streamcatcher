@@ -7,9 +7,9 @@ response — responses expose only the opaque session id and the viewport state.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from streamcatcher.config import Projection
+from streamcatcher.config import Projection, validate_stream_url
 
 
 class CreateSessionRequest(BaseModel):
@@ -17,6 +17,18 @@ class CreateSessionRequest(BaseModel):
 
     url: str = Field(description="RTMP/RTSP stream URL (may embed credentials; never echoed back).")
     projection: Projection = Projection.FLAT
+
+    @field_validator("url")
+    @classmethod
+    def _check_scheme(cls, value: str) -> str:
+        """Reject anything that isn't an RTSP/RTMP stream URL.
+
+        Without this the server will open whatever the caller sends —
+        ``file:///etc/passwd``, a bare local path, or an ``http://`` URL aimed at
+        an internal host — so this is the boundary that keeps API access from
+        becoming arbitrary file read and SSRF.
+        """
+        return validate_stream_url(value)
 
 
 class LookRequest(BaseModel):
