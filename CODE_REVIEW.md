@@ -9,9 +9,9 @@ and unusually good docstrings. Findings below, ordered by priority.
 
 - Items **1–5** fixed on `fix/code-review-1-5`, plus the broken local venv that
   made item 1's fix invisible (see item 1).
-- Items **6, 9, 10** fixed on `fix/code-review-6-9-10`.
+- Items **6, 9, 10, 15** fixed on `fix/code-review-6-9-10`.
 - Item **8** needed no change (already documented).
-- Items **7, 11–16** remain open.
+- Items **7, 11–14, 16** remain open.
 
 Every fix carries a regression test verified to fail without it. Suite: 246
 passed, 0 skipped, ruff clean.
@@ -174,11 +174,17 @@ passed, 0 skipped, ruff clean.
 
 ## Housekeeping
 
-15. `.gitignore` covers `streamcatcher-snapshot-*.jpg` but not the newer
-    outputs: `streamcatcher-recording-*.mp4` and
-    `streamcatcher-orientations-*/`. The untracked `views/` directory with four
-    JPEGs in the repo right now is exactly this leak — the artifacts of an
-    `--orientations views` run.
+15. ~~**`.gitignore` misses the newer capture outputs.**~~ **Fixed.** Added
+    `streamcatcher-recording-*.mp4`, `streamcatcher-orientations-*/` and
+    `views/` alongside the existing `streamcatcher-snapshot-*.jpg`, each
+    verified against a real file with `git check-ignore`. The named patterns
+    match the timestamped defaults each option falls back to when given no
+    PATH/DIR; an explicit output path is the user's to place and ignore.
+
+    ⚠️ `views/` is broader than the others — it has no `streamcatcher-` prefix
+    and no leading slash, so it would also hide a source directory named
+    `views/` at any depth. Nothing in the repo is called that today. Narrow it
+    to `/views/` if that ever changes.
 
 16. `CODEBASE_NOTES.md` is stale in several places (says version 0.0.1,
     references a `STREAMCATCHER_SNAPSHOT_DIR` removal task that seems done, and
@@ -220,7 +226,6 @@ independent, roughly in descending value:
 4. **Item 14** (four small nits) — the IPv6 bug in `strip_url_credentials` is
    the only one with real teeth.
 5. **Item 12** (GUI busy-spin) — real but small; see the verification notes.
-6. **Items 15, 16** (gitignore patterns, stale `CODEBASE_NOTES.md`) —
-   housekeeping. Item 15 is partly done: `views/` is now ignored, but the
-   general `streamcatcher-recording-*.mp4` and `streamcatcher-orientations-*/`
-   patterns are still missing.
+6. **Item 16** (stale `CODEBASE_NOTES.md`) — housekeeping. Worth doing since
+   it's the AI-context file, and item 6 above just invalidated one more line of
+   it: the factory still doesn't validate the URL, but the API model now does.
