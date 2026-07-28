@@ -23,14 +23,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _resolved_distribution_url() -> str | None:
-    """The source URL the installed ``streamcatcher`` distribution points at.
+    """The source *directory* the installed ``streamcatcher`` distribution points at.
 
-    ``None`` for a non-editable (wheel) install, which has no ``direct_url.json``.
+    ``None`` whenever the install didn't come from a directory, which means there
+    is no checkout to compare against: a PyPI install has no ``direct_url.json``
+    at all, and one built from a wheel or sdist records ``archive_info`` rather
+    than ``dir_info`` (PEP 610). Only a directory install — editable or not — is
+    a checkout.
     """
     direct_url = distribution("streamcatcher").read_text("direct_url.json")
     if direct_url is None:
         return None
-    return json.loads(direct_url).get("url")
+    payload = json.loads(direct_url)
+    if "dir_info" not in payload:
+        return None
+    return payload.get("url")
 
 
 def test_metadata_comes_from_this_checkout():
@@ -42,7 +49,7 @@ def test_metadata_comes_from_this_checkout():
     """
     resolved = _resolved_distribution_url()
     if resolved is None:
-        return  # a wheel install (e.g. CI testing a built artifact) — nothing to compare
+        return  # not installed from a directory — no checkout to compare against
     assert resolved == REPO_ROOT.as_uri(), (
         f"streamcatcher resolves to {resolved}, not this checkout "
         f"({REPO_ROOT.as_uri()}). The environment is reading another install's "
