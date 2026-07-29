@@ -25,6 +25,8 @@ powered by OpenCV.
 - **Recording:** capture a stream to a file while you watch with `--record` — an
   `opencv` mode (video only, no extra dependency) or a lossless, audio-keeping
   `ffmpeg` mode. Cap the length with `--duration SECONDS`.
+- **Four-orientation split:** `--orientations` turns one 360° frame into four
+  flat views — front, right, back, left — that tile the whole horizon, then exits.
 - **Auto-reconnect:** when a live stream drops, reconnect with exponential
   backoff (retries forever by default; `--no-reconnect` to exit on the first drop).
 - **Offline-first:** the package and the entire test suite run with no network,
@@ -54,7 +56,8 @@ ffmpeg app, …) is required.
 
 On a server, container, or CI box you don't need the desktop window — and the
 default GUI build's system libraries (`libGL.so.1` on Linux) may be missing.
-Swap in the headless OpenCV build so `serve` and `--snapshot` run without them:
+Swap in the headless OpenCV build so `serve`, `--snapshot`, and `--orientations`
+run without them:
 
 ```console
 pip install streamcatcher
@@ -62,7 +65,8 @@ pip uninstall opencv-python
 pip install opencv-python-headless
 ```
 
-`streamcatcher serve` and `streamcatcher play --snapshot` work fully headless.
+`streamcatcher serve`, `streamcatcher play --snapshot`, and
+`streamcatcher play --orientations` work fully headless.
 Only the live `play` window needs the default `opencv-python` build; on a
 headless build it exits with a clear message instead of a cryptic OpenCV error.
 (The two wheels both provide `cv2` and can't coexist, so it's a swap, not an extra.)
@@ -87,6 +91,9 @@ streamcatcher play rtsp://cam/live --record capture.mp4
 
 # Record losslessly with audio (needs the ffmpeg binary), capped at 60 seconds
 streamcatcher play rtsp://cam/live --record capture.mp4 --record-mode ffmpeg --duration 60
+
+# Split one 360° frame into front/right/back/left views and exit — no window
+streamcatcher play rtsp://cam/live --orientations ./views
 ```
 
 In the viewer window: **`W`/`A`/`S`/`D`** (or **drag the mouse**) aim · **`+`/`-`** zoom · **`p`** snapshot · **`q`** quit.
@@ -98,9 +105,10 @@ in the current directory.
 | `--backend` / `-b` | `opencv` (live window, default), `stub` (offline no-op) | `STREAMCATCHER_BACKEND` |
 | `--projection` / `-p` | `flat` (default), `equirect` | `STREAMCATCHER_PROJECTION` |
 | `--snapshot` | optional `PATH` — save one frame and exit; defaults to a timestamped JPEG in the current directory | — |
-| `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` | — |
+| `--record` | optional `PATH` — record while playing; defaults to a timestamped `.mp4` in the current directory. Mutually exclusive with `--snapshot` and `--orientations` | — |
 | `--record-mode` | `opencv` (default, video only), `ffmpeg` (lossless + audio) | `STREAMCATCHER_RECORD_MODE` |
 | `--duration` | `SECONDS` — stop recording and playback after the first frame; requires `--record` | `STREAMCATCHER_RECORD_DURATION` |
+| `--orientations` | optional `DIR` — split one 360° frame into four flat views and exit; defaults to a timestamped folder. Mutually exclusive with `--snapshot` and `--record` | `STREAMCATCHER_ORIENTATION_SIZE`, `STREAMCATCHER_ORIENTATION_HFOV_DEG` |
 | `--reconnect` / `--no-reconnect` | auto-reconnect on drop (default on) | `STREAMCATCHER_RECONNECT_ENABLED` |
 
 `play` opens a real OpenCV window by default; pass `-b stub` (or set
