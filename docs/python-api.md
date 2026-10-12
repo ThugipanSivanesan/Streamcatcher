@@ -21,13 +21,13 @@ from streamcatcher import StreamSession
 from streamcatcher import StreamSession
 
 session = StreamSession("rtsp://user:pass@camera.local/stream1")
-session.open()                     # loads cv2, opens the capture (raises on failure)
+session.open()  # loads cv2, opens the capture (raises on failure)
 try:
-    frame = session.read_frame()   # a raw BGR ndarray, or None when the stream ends
+    frame = session.read_frame()  # a raw BGR ndarray, or None when the stream ends
     if frame is not None:
-        view = session.render(frame)   # reproject in 360 modes; pass-through when flat
+        view = session.render(frame)  # reproject in 360 modes; pass-through when flat
 finally:
-    session.close()                # safe to call more than once
+    session.close()  # safe to call more than once
 ```
 
 `open()` raises [`StreamOpenError`][streamcatcher.player.session.StreamOpenError] if
@@ -46,13 +46,13 @@ from streamcatcher.config import Projection
 session = StreamSession("rtsp://camera.local/live", projection=Projection.EQUIRECT)
 session.open()
 
-session.pan_right()          # discrete steps…
+session.pan_right()  # discrete steps…
 session.tilt_up()
 session.zoom_in()
-session.look(pan=30, tilt=-10, zoom=-15)   # …or explicit degree deltas
+session.look(pan=30, tilt=-10, zoom=-15)  # …or explicit degree deltas
 
-view = session.grab_view()   # read + reproject the current viewport
-print(session.state())       # ViewState(projection='equirect', yaw_deg=…, pitch_deg=…, hfov_deg=…)
+view = session.grab_view()  # read + reproject the current viewport
+print(session.state())  # ViewState(projection='equirect', yaw_deg=…, pitch_deg=…, hfov_deg=…)
 ```
 
 `look()`'s `zoom` is a horizontal-FOV **delta**: negative narrows the view (zooms
@@ -62,7 +62,7 @@ reports `None` orientation fields.
 ## Snapshots
 
 ```python
-session.snapshot("shot.jpg")            # grab the current viewport and write it
+session.snapshot("shot.jpg")  # grab the current viewport and write it
 ```
 
 `snapshot()` retries a few reads while a just-opened decoder warms up, renders the
@@ -75,9 +75,9 @@ the file can't be written. To write a frame you already have in hand, use
 ## Reconnect
 
 ```python
-if session.read_frame() is None:        # the stream dropped
-    if session.reconnect():             # tear down + reopen; keeps the viewport orientation
-        ...                             # back in business
+if session.read_frame() is None:  # the stream dropped
+    if session.reconnect():  # tear down + reopen; keeps the viewport orientation
+        ...  # back in business
 ```
 
 `reconnect()` returns `False` (rather than raising) when the stream still can't be
@@ -95,7 +95,7 @@ implement a small [`Player`][streamcatcher.player.base.Player] protocol
 from streamcatcher.player.opencv_player import OpenCvPlayer
 
 player = OpenCvPlayer("rtsp://cam/live", projection=Projection.EQUIRECT)
-player.play()          # blocks: opens a window and pumps frames until you quit
+player.play()  # blocks: opens a window and pumps frames until you quit
 ```
 
 The full signatures are in the [API reference](reference.md).

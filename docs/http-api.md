@@ -95,10 +95,13 @@ Open a session, aim the camera, and grab the view an agent would reason over:
     base = "http://localhost:8000"
 
     # 1. Open a session — the URL is accepted but never returned
-    r = requests.post(f"{base}/session", json={
-        "url": "rtsp://user:pass@camera.local/live",
-        "projection": "equirect",
-    })
+    r = requests.post(
+        f"{base}/session",
+        json={
+            "url": "rtsp://user:pass@camera.local/live",
+            "projection": "equirect",
+        },
+    )
     sid = r.json()["id"]
 
     # 2. Aim the virtual camera
