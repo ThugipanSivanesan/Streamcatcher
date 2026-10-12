@@ -53,10 +53,13 @@ Mirror the existing `Player` Protocol style (`player/base.py`).
 class Recorder(Protocol):
     def start(self, sample_frame, fps: float | None) -> None:
         """Open the output. `sample_frame` supplies width/height; `fps` may be None."""
+
     def write(self, frame) -> None:
         """Append one frame (opencv) or a no-op (ffmpeg copies the stream itself)."""
+
     def stop(self) -> None:
         """Finalize and close the output. Safe to call more than once."""
+
     def is_recording(self) -> bool: ...
 ```
 
@@ -118,16 +121,16 @@ Add a `RecordMode` enum next to `Backend`/`Projection` (`config.py:18-29`):
 
 ```python
 class RecordMode(StrEnum):
-    OPENCV = "opencv"   # cv2.VideoWriter, video-only, re-encoded
-    FFMPEG = "ffmpeg"   # ffmpeg -c copy, lossless, with audio
+    OPENCV = "opencv"  # cv2.VideoWriter, video-only, re-encoded
+    FFMPEG = "ffmpeg"  # ffmpeg -c copy, lossless, with audio
 ```
 
 Add fields to `Settings` (after the reconnect block, ~`config.py:62`):
 
 ```python
 record_mode: RecordMode = RecordMode.OPENCV
-record_fps: int = 25          # fallback when the stream doesn't report fps (opencv mode)
-record_fourcc: str = "mp4v"   # cv2.VideoWriter codec (opencv mode)
+record_fps: int = 25  # fallback when the stream doesn't report fps (opencv mode)
+record_fourcc: str = "mp4v"  # cv2.VideoWriter codec (opencv mode)
 ```
 
 The output path is a CLI concern (not persisted in `Settings`), matching how
